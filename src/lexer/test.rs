@@ -23,18 +23,7 @@ fn tokenize_space_eol() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![
-            Token::Space,
-            Token::Space,
-            Token::EOL,
-            Token::Space,
-            Token::EOL,
-            Token::Space,
-            Token::EOL,
-            Token::Space,
-            Token::EOL,
-            Token::EOL,
-        ],
+        &vec![Token::EOL, Token::EOL, Token::EOL, Token::EOL, Token::EOL],
     )
 }
 
@@ -47,13 +36,7 @@ fn tokenize_integer() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![
-            Token::Space,
-            Token::Integer(123),
-            Token::Space,
-            Token::Integer(-123),
-            Token::EOL,
-        ],
+        &vec![Token::Integer(123), Token::Integer(-123), Token::EOL],
     )
 }
 
@@ -68,17 +51,11 @@ fn tokenize_float() {
         &lexer.token_vec,
         &vec![
             Token::Real(1.5),
-            Token::Space,
             Token::Real(-23.4),
-            Token::Space,
             Token::Real(110.0),
-            Token::Space,
             Token::Real(0.5),
-            Token::Space,
             Token::Real(4.0),
-            Token::Space,
             Token::Real(-0.002),
-            Token::Space,
             Token::Real(0.0),
         ],
     )
@@ -122,9 +99,7 @@ fn tokenize_array() {
         &vec![
             Token::ArrayStart,
             Token::Integer(123),
-            Token::Space,
             Token::String("aa\\(".as_bytes().to_vec()),
-            Token::Space,
             Token::Real(-55.0),
             Token::ArrayEnd,
         ],
@@ -150,7 +125,7 @@ fn tokenize_name() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Name("Name..;$@?!".as_bytes().to_vec()), Token::Space],
+        &vec![Token::Name("Name..;$@?!".as_bytes().to_vec())],
     )
 }
 
@@ -163,11 +138,7 @@ fn tokenize_comment() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![
-            Token::Name("Name".as_bytes().to_vec()),
-            Token::Space,
-            Token::Integer(123),
-        ],
+        &vec![Token::Name("Name".as_bytes().to_vec()), Token::Integer(123)],
     )
 }
 
@@ -180,12 +151,6 @@ fn tokenize_bool_null() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![
-            Token::Null,
-            Token::Space,
-            Token::Boolean(true),
-            Token::Space,
-            Token::Boolean(false),
-        ],
+        &vec![Token::Null, Token::Boolean(true), Token::Boolean(false)],
     )
 }

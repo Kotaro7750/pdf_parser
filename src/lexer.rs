@@ -11,7 +11,6 @@ mod test;
 #[derive(PartialEq, Debug)]
 pub enum Token {
     EOL,
-    Space,
     Boolean(bool),
     Integer(isize),
     Real(f64),
@@ -170,7 +169,7 @@ impl<'a> Lexer<'a> {
             // Space
             if let 0 | 9 | 12 | 32 = self.byte {
                 self.move_next_byte();
-                self.confirm_token(Token::Space);
+                self.skip_token();
                 continue;
             }
 
@@ -178,7 +177,7 @@ impl<'a> Lexer<'a> {
             if self.char == '%' {
                 is_comment = true;
                 self.move_next_byte();
-                self.confirm_token(Token::Space);
+                self.skip_token();
                 continue;
             }
 
@@ -334,17 +333,11 @@ impl<'a> Lexer<'a> {
 
             // 間接参照
             if self.char == 'R' {
-                let must_space_1 = self.token_vec.pop();
                 let may_gen_num = self.token_vec.pop();
-                let must_space_2 = self.token_vec.pop();
                 let may_obj_num = self.token_vec.pop();
 
-                if let (
-                    Some(Token::Space),
-                    Some(Token::Integer(object_num)),
-                    Some(Token::Space),
-                    Some(Token::Integer(generation_num)),
-                ) = (must_space_1, &may_obj_num, must_space_2, &may_gen_num)
+                if let (Some(Token::Integer(object_num)), Some(Token::Integer(generation_num))) =
+                    (&may_obj_num, &may_gen_num)
                 {
                     if *object_num > 0 && *generation_num >= 0 {
                         self.move_next_byte();
