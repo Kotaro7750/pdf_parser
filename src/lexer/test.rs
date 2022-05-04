@@ -63,27 +63,26 @@ fn tokenize_float() {
 
 #[test]
 fn tokenize_hex_str() {
-    let buffer = "<a0e0>".as_bytes();
+    let buffer = "<a0e0f>".as_bytes();
     let mut lexer = Lexer::new(buffer).unwrap();
 
     lexer.tokenize().unwrap();
 
-    assert_eq_token_vec(
-        &lexer.token_vec,
-        &vec![Token::HexStr("a0e0".as_bytes().to_vec())],
-    )
+    assert_eq_token_vec(&lexer.token_vec, &vec![Token::HexStr(vec![160, 224, 240])])
 }
 
 #[test]
 fn tokenize_string() {
-    let buffer = "( (aaaa) \\) \\( \\\\)".as_bytes();
+    let buffer = "(hoge \t \\\\ \\053 (\\0053))".as_bytes();
     let mut lexer = Lexer::new(buffer).unwrap();
 
     lexer.tokenize().unwrap();
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::String(" (aaaa) \\) \\( \\\\".as_bytes().to_vec())],
+        &vec![Token::String(vec![
+            104, 111, 103, 101, 32, 9, 32, 92, 32, 43, 32, 40, 5, 51, 41,
+        ])],
     )
 }
 
@@ -99,7 +98,7 @@ fn tokenize_array() {
         &vec![
             Token::ArrayStart,
             Token::Integer(123),
-            Token::String("aa\\(".as_bytes().to_vec()),
+            Token::String(vec![97, 97, 40]),
             Token::Real(-55.0),
             Token::ArrayEnd,
         ],
@@ -125,7 +124,7 @@ fn tokenize_name() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Name("Name..;$@?!".as_bytes().to_vec())],
+        &vec![Token::Name(String::from("Name..;$@?!"))],
     )
 }
 
@@ -138,7 +137,7 @@ fn tokenize_comment() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Name("Name".as_bytes().to_vec()), Token::Integer(123)],
+        &vec![Token::Name(String::from("Name")), Token::Integer(123)],
     )
 }
 

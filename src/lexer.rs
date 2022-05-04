@@ -7,7 +7,7 @@ pub mod error;
 #[cfg(test)]
 mod test;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Token {
     EOL,
     Boolean(bool),
@@ -15,13 +15,138 @@ pub enum Token {
     Real(f64),
     HexStr(Vec<u8>),
     String(Vec<u8>),
-    Name(Vec<u8>),
+    Name(String),
     DictStart,
     DictEnd,
     ArrayStart,
     ArrayEnd,
     Null,
     IndirectRef(usize, usize),
+}
+
+fn into_name(buffer: &[u8]) -> Result<String, error::Error> {
+    if !buffer.is_ascii() {
+        Err(error::Error::InvalidName(buffer.to_vec()))
+    } else {
+        // 全部ASCIIなのでUTFエラーは起こらないはず
+        Ok(String::from_utf8(buffer.to_vec()).unwrap())
+    }
+}
+
+// 並んだバイト列をエスケープシーケンスを解釈したバイト列にして返す
+fn into_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
+    let mut vec: Vec<u8> = vec![];
+    let mut i = 0;
+    let mut octal_string = String::new();
+    let mut is_in_octal = false;
+
+    let mut prev_backslash = false;
+
+    while i < buffer.len() {
+        let byte = buffer[i];
+
+        if is_in_octal {
+            // 3桁既に読んでいたり8進数文字以外の文字が出てきたら確定させる
+            if octal_string.len() == 3 || !(0x30 <= byte && byte <= 0x37) {
+                let octal_value = u16::from_str_radix(octal_string.as_str(), 8).unwrap();
+                let octal_value: u8 = octal_value.to_be_bytes()[1];
+
+                vec.push(octal_value);
+
+                is_in_octal = false;
+                octal_string = String::new();
+            } else {
+                octal_string.push_str(str::from_utf8(&buffer[i..(i + 1)]).unwrap());
+                i += 1;
+                continue;
+            }
+        }
+
+        if prev_backslash {
+            match byte {
+                // nならLF
+                0x6e => vec.push(0x0a),
+                // rならCR
+                0x72 => vec.push(0x0d),
+                // tならTAB
+                0x74 => vec.push(0x0b),
+                // bならBS
+                0x62 => vec.push(0x08),
+                // fならFF
+                0x66 => vec.push(0x0c),
+                // (なら(
+                0x28 => vec.push(0x28),
+                // )なら)
+                0x29 => vec.push(0x29),
+                // \なら\
+                0x5c => vec.push(0x5c),
+                // 数字なら8進数として解釈し始める
+                0x30..=0x37 => {
+                    is_in_octal = true;
+                    octal_string.push_str(str::from_utf8(&buffer[i..(i + 1)]).unwrap());
+                }
+                // それ以外ならバックスラッシュは無視する
+                _ => vec.push(byte),
+            }
+
+            prev_backslash = false;
+            i += 1;
+            continue;
+        }
+
+        // バックスラッシュが表れたときには適切にエスケープする必要がある
+        if byte == 0x5c {
+            prev_backslash = true;
+            i += 1;
+            continue;
+        }
+
+        vec.push(byte);
+        i += 1;
+        continue;
+    }
+
+    Ok(vec)
+}
+
+// 並んだバイト列を16進数文字列の1桁とみなし，2桁をまとめて1バイトの16進数として解釈した数列を返す
+// 奇数桁しかない場合には最後に暗黙の0を補う
+fn into_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
+    let mut vec: Vec<u8> = vec![];
+    let mut i = 0;
+
+    let mut string: String = String::from("");
+
+    while i < buffer.len() {
+        let byte = buffer[i];
+        if !byte.is_ascii_hexdigit() {
+            // TODO エラー
+            return Err(error::Error::EmptyBuffer);
+        }
+
+        // byteをASCII文字と見て文字（列）にする
+        // ASCII文字であることは確定しているのでunwrapしていい
+        let str_slice = str::from_utf8(&buffer[i..i + 1]).unwrap();
+
+        if i % 2 == 0 {
+            string = String::from(str_slice);
+        } else {
+            string.push_str(str_slice);
+            // 16進数文字列であることは確定しているのでunwrapしていい
+            vec.push(u8::from_str_radix(string.as_str(), 16).unwrap());
+            string = String::from("");
+        }
+
+        i += 1;
+    }
+
+    // 奇数桁だったら最終桁に0を補う
+    if buffer.len() % 2 == 1 {
+        string.push_str("0");
+        vec.push(u8::from_str_radix(string.as_str(), 16).unwrap());
+    }
+
+    Ok(vec)
 }
 
 // Streamオブジェクト・間接オブジェクト以外のオブジェクトの字句解析を行う
@@ -212,9 +337,9 @@ impl<'a> Lexer<'a> {
                 }
 
                 //  この時点でtoken_head_iは/を指しているので token_head_i + 1
-                self.confirm_token(Token::Name(
-                    (&self.buffer[(self.token_head_i + 1)..self.i]).to_vec(),
-                ));
+                self.confirm_token(Token::Name(into_name(
+                    &self.buffer[(self.token_head_i + 1)..self.i],
+                )?));
                 continue;
             }
 
@@ -244,7 +369,9 @@ impl<'a> Lexer<'a> {
                 }
 
                 // token_head_iは<を指しているので token_head_i ではなく token_head_i + 1
-                let token = Token::HexStr((&self.buffer[(self.token_head_i + 1)..self.i]).to_vec());
+                let token = Token::HexStr(into_hex_string(
+                    &self.buffer[(self.token_head_i + 1)..self.i],
+                )?);
 
                 self.move_next_byte();
                 self.confirm_token(token);
@@ -278,7 +405,6 @@ impl<'a> Lexer<'a> {
                 let mut parenthes_depth = 0;
 
                 while !(prev_backslash == false && parenthes_depth == 0 && self.char == ')') {
-                    println!("{} {} {}", self.char, prev_backslash, parenthes_depth);
                     // エスケープされていない(はエスケープされていない)に対応させる必要がある
                     if prev_backslash == false && self.char == '(' {
                         parenthes_depth += 1;
@@ -305,7 +431,8 @@ impl<'a> Lexer<'a> {
                 }
 
                 // token_head_iは(を，iは)を指しているので token_head_i ではなく token_head_i + 1
-                let token = Token::String((&self.buffer[(self.token_head_i + 1)..self.i]).to_vec());
+                let token =
+                    Token::String(into_string(&self.buffer[(self.token_head_i + 1)..self.i])?);
 
                 self.move_next_byte();
                 self.confirm_token(token);

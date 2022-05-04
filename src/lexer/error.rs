@@ -8,6 +8,7 @@ pub enum Error {
     ParseNumber(String),
     FinishInObject,
     InvalidObjectHead(u8),
+    InvalidName(Vec<u8>),
     InvalidIndirectRef(Option<Token>, Option<Token>),
 }
 
@@ -25,6 +26,9 @@ impl Error {
             Error::FinishInObject => write!(f, "Buffer is finished within object"),
             Error::InvalidObjectHead(byte) => {
                 write!(f, "Encounter not object header byte {}", byte)
+            }
+            Error::InvalidName(vec) => {
+                write!(f, "Cannot convert byte '{:?}' into valid Name", vec)
             }
             Error::InvalidIndirectRef(may_obj_num, may_gen_num) => {
                 write!(

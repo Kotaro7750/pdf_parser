@@ -1,11 +1,12 @@
 use std::fmt;
 
 use crate::lexer::error as lexer_error;
+use crate::lexer::Token;
 
 pub enum Error {
     EmptyBuffer,
     NoToken,
-    UnexpectedToken,
+    UnexpectedToken(Token),
     Lexer(lexer_error::Error),
 }
 
@@ -14,7 +15,7 @@ impl Error {
         match self {
             Error::EmptyBuffer => write!(f, "Buffer is Empty"),
             Error::NoToken => write!(f, "Token is missing"),
-            Error::UnexpectedToken => write!(f, "UnexpectedToken is found"),
+            Error::UnexpectedToken(token) => write!(f, "UnexpectedToken is found: {:?}", token),
             Error::Lexer(e) => write!(f, "Error in Lexer: {}", e),
         }
     }
