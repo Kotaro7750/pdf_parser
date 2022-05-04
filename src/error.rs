@@ -1,4 +1,4 @@
-use crate::lexer::error as lexer_error;
+use crate::parser::error as parser_error;
 
 #[derive(Debug)]
 pub enum Error {
@@ -8,7 +8,7 @@ pub enum Error {
     Utf8Error(std::str::Utf8Error),
     TargetNotFound,
     CannotParse,
-    Lexer(lexer_error::Error),
+    Parser(parser_error::Error),
 }
 
 impl From<std::io::Error> for Error {
@@ -38,7 +38,7 @@ impl std::fmt::Display for Error {
             Error::Utf8Error(e) => write!(f, "{}", e),
             Error::TargetNotFound => write!(f, "Target Not Found"),
             Error::CannotParse => write!(f, "Cannot Parse"),
-            Error::Lexer(e) => write!(f, "Error in Lexer: {}", e),
+            Error::Parser(e) => write!(f, "Error in Parser: {}", e),
         }
     }
 }

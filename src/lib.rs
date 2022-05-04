@@ -6,6 +6,7 @@ use std::str;
 
 mod error;
 mod lexer;
+mod parser;
 mod raw_byte;
 
 pub struct PDF<'a> {

@@ -1,8 +1,7 @@
-use crate::raw_byte;
 use std::str;
 use std::str::FromStr;
 
-use crate::error as api_error;
+use crate::raw_byte;
 
 pub mod error;
 #[cfg(test)]
@@ -35,13 +34,13 @@ pub struct Lexer<'a> {
     token_head_i: usize,
     byte: u8,
     char: char,
-    token_vec: Vec<Token>,
+    pub token_vec: Vec<Token>,
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(buffer: &[u8]) -> Result<Lexer, api_error::Error> {
+    pub fn new(buffer: &[u8]) -> Result<Lexer, error::Error> {
         if buffer.len() == 0 {
-            Err(api_error::Error::CannotParse)
+            Err(error::Error::EmptyBuffer)
         } else {
             Ok(Lexer {
                 buffer,
@@ -54,12 +53,8 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<(), api_error::Error> {
-        if let Err(e) = self._tokenize() {
-            Err(api_error::Error::Lexer(e))
-        } else {
-            Ok(())
-        }
+    pub fn tokenize(&mut self) -> Result<(), error::Error> {
+        Ok(self._tokenize()?)
     }
 
     fn move_next_byte(&mut self) -> bool {
