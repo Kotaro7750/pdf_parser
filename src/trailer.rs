@@ -9,6 +9,8 @@ pub mod error;
 
 pub struct Trailer {
     xref_start_offset: isize,
+    xref_entry_num: usize,
+    root_catalog_ref: (usize, usize),
 }
 
 pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::Error> {
@@ -54,9 +56,19 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
         Err(e) => return Err(error::Error::ParseTrailerDict(e)),
     };
 
-    println!("{:?}", trailer_dict);
+    let xref_entry_num = match trailer_dict.get("Size") {
+        Some(parser::Object::Integer(int)) if *int > 0 => *int,
+        _ => return Err(error::Error::InvalidTrailerDict(String::from("Size"))),
+    } as usize;
+
+    let root_catalog_ref = match trailer_dict.get("Root") {
+        Some(parser::Object::IndirectRef(obj_num, gen_num)) => (*obj_num, *gen_num),
+        _ => return Err(error::Error::InvalidTrailerDict(String::from("Root"))),
+    };
 
     Ok(Trailer {
         xref_start_offset: xref_offset,
+        xref_entry_num,
+        root_catalog_ref,
     })
 }

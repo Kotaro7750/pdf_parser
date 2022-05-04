@@ -12,6 +12,7 @@ pub enum Error {
     XRefOffsetNotInteger(Object),
     ParseTrailerDict(parser_error::Error),
     TrailerDictNotDict(Object),
+    InvalidTrailerDict(String),
 }
 
 impl Error {
@@ -28,6 +29,9 @@ impl Error {
             Error::XRefOffsetNotInteger(obj) => write!(f, "Object '{:?}' is not integer", obj),
             Error::ParseTrailerDict(e) => write!(f, "Error on parsing trailer dictionary: {}", e),
             Error::TrailerDictNotDict(obj) => write!(f, "Object '{:?}' is not dictionary", obj),
+            Error::InvalidTrailerDict(str) => {
+                write!(f, "Trailer dictionary must contain '{}'", str)
+            }
         }
     }
 }
