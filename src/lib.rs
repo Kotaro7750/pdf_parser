@@ -21,12 +21,9 @@ impl<'a> PDF<'a> {
 
         let trailer = trailer::parse_trailer(file, size)?;
 
-        let xref = cross_reference::XRef::new(file, &trailer);
+        let mut xref = cross_reference::XRef::new(file, &trailer);
 
-        println!(
-            "{} {} {}",
-            xref.from, xref.entry_num, xref.actual_start_offset
-        );
+        xref.get_object_byte_offset(10, 0);
 
         Ok(PDF {
             file: file,

@@ -7,14 +7,15 @@ use std::str;
 use crate::raw_byte;
 use crate::trailer;
 
-pub struct XRef {
+pub struct XRef<'a> {
+    file: &'a File,
     pub actual_start_offset: u64,
     pub from: usize,
     pub entry_num: usize,
 }
 
-impl XRef {
-    pub fn new(file: &mut File, trailer_dict: &trailer::Trailer) -> XRef {
+impl<'a> XRef<'a> {
+    pub fn new(file: &'a mut File, trailer_dict: &trailer::Trailer) -> XRef<'a> {
         // TODO なぜ30?
         let mut buffer: [u8; 30] = [0; 30];
 
@@ -47,10 +48,56 @@ impl XRef {
         let eol_skipped = raw_byte::extract_after_eol(start_at_eol).unwrap();
         let actual_start_offset = (n - eol_skipped.len()) as u64 + trailer_dict.xref_start_offset;
 
-        XRef {
+        XRef::<'a> {
+            file,
             actual_start_offset,
             from,
             entry_num,
         }
+    }
+
+    fn parse_entry(buffer: [u8; 18]) -> (u64, u64, bool) {
+        let n_buf = &buffer[..10];
+        let g_buf = &buffer[11..16];
+        let t_byte = buffer[17];
+
+        (
+            u64::from_str_radix(str::from_utf8(n_buf).unwrap(), 10).unwrap(),
+            u64::from_str_radix(str::from_utf8(g_buf).unwrap(), 10).unwrap(),
+            match t_byte {
+                110 => true,
+                103 => false,
+                _ => panic!("{} is not supported type", t_byte),
+            },
+        )
+    }
+
+    pub fn get_object_byte_offset(&mut self, obj_num: usize, gen_num: u64) -> u64 {
+        if obj_num < self.from || (self.from + self.entry_num) <= obj_num {
+            panic!("object is not in cross reference");
+        }
+
+        // TODO usizeなのかu64なのかはっきり
+        // u64でいいよね
+        // 1エントリはきっかり20バイトである
+        let byte_offset = self.actual_start_offset + ((obj_num - self.from) * 20) as u64;
+
+        let mut buffer: [u8; 18] = [0; 18];
+
+        self.file.seek(SeekFrom::Start(byte_offset)).unwrap();
+
+        if self.file.read(&mut buffer).unwrap() != 18 {
+            panic!("cannot read 18 byte");
+        };
+
+        let (offset, gen, is_n) = Self::parse_entry(buffer);
+
+        if gen != gen_num {
+            panic!("generation number mismatch");
+        }
+
+        println!("{} {} {}", offset, gen, is_n);
+
+        offset
     }
 }
