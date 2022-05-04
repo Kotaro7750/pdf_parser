@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn skip_eol_1() {
+    let buffer = "  kjkj\n".as_bytes();
+
+    let buffer = extract_after_eol(buffer).unwrap();
+    assert_eq!(buffer, "".as_bytes());
+}
+
+#[test]
+fn extract_after_eol_2() {
+    let buffer = "  hogehoeg \r\nhoge".as_bytes();
+
+    let buffer = extract_after_eol(buffer).unwrap();
+    assert_eq!(buffer, "hoge".as_bytes());
+}
+
+#[test]
+fn extract_after_eol_3() {
+    let buffer = "hoge\r   \nfuga".as_bytes();
+
+    let buffer = extract_after_eol(buffer).unwrap();
+    assert_eq!(buffer, "   \nfuga".as_bytes());
+}
+
+#[test]
 fn first_match_index_1() {
     let buffer = "0123abcd\n { target\r hoge".as_bytes();
     let target = "target".as_bytes();

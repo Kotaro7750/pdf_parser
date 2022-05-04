@@ -1,3 +1,5 @@
+use std::cmp;
+
 #[cfg(test)]
 pub mod test;
 
@@ -45,6 +47,46 @@ fn last_match_index(buffer: &[u8], target: &[u8]) -> Result<usize, error::Error>
     }
 
     Err(error::Error::TargetNotFound(target.to_vec()))
+}
+
+// (EOLの開始インデックス,EOLのバイト数)を返す
+fn find_eol(buffer: &[u8]) -> Result<(usize, usize), error::Error> {
+    let mut cr_i: Option<usize> = None;
+    let mut lf_i: Option<usize> = None;
+
+    if let Ok(i) = first_match_index(buffer, "\n".as_bytes()) {
+        lf_i = Some(i);
+    }
+
+    if let Ok(i) = first_match_index(buffer, "\r".as_bytes()) {
+        cr_i = Some(i);
+    }
+
+    match (cr_i, lf_i) {
+        (Some(cr_i), Some(lf_i)) => {
+            // CRLFはまとめて一つのEOLマーカー
+            if lf_i == cr_i + 1 {
+                Ok((cr_i, 2))
+            } else {
+                Ok((cmp::min(cr_i, lf_i), 1))
+            }
+        }
+        (Some(cr_i), None) => Ok((cr_i, 1)),
+        (None, Some(lf_i)) => Ok((lf_i, 1)),
+        (None, None) => Err(error::Error::EOLNotFound),
+    }
+}
+
+pub fn extract_after_eol(buffer: &[u8]) -> Result<&[u8], error::Error> {
+    let (eol_i, eol_size) = find_eol(buffer)?;
+
+    Ok(&buffer[(eol_i + eol_size)..])
+}
+
+pub fn extract_from_eol(buffer: &[u8]) -> Result<&[u8], error::Error> {
+    let (eol_i, eol_size) = find_eol(buffer)?;
+
+    Ok(&buffer[(eol_i)..])
 }
 
 pub fn is_next_satisfy<F>(buffer: &[u8], i: usize, f: F) -> bool

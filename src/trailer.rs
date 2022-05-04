@@ -8,7 +8,7 @@ use crate::raw_byte;
 pub mod error;
 
 pub struct Trailer {
-    xref_start_offset: isize,
+    pub xref_start_offset: u64,
     xref_entry_num: usize,
     root_catalog_ref: (usize, usize),
 }
@@ -34,12 +34,12 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
     };
 
     let xref_offset = match parser.parse() {
-        Ok(parser::Object::Integer(int)) => int,
+        Ok(parser::Object::Integer(int)) if int > 0 => int,
         Ok(obj) => {
             return Err(error::Error::XRefOffsetNotInteger(obj));
         }
         Err(e) => return Err(error::Error::ParseXRefOffset(e)),
-    };
+    } as u64;
 
     // トレーラ辞書を取得
     let trailer_dict_buffer = raw_byte::extract_after(buffer, "trailer".as_bytes())?;

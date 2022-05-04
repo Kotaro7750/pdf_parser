@@ -1,5 +1,6 @@
 use std::fs::File;
 
+mod cross_reference;
 mod error;
 mod header;
 mod lexer;
@@ -19,6 +20,13 @@ impl<'a> PDF<'a> {
         let is_pdf = header::expect_pdf(file)?;
 
         let trailer = trailer::parse_trailer(file, size)?;
+
+        let xref = cross_reference::XRef::new(file, &trailer);
+
+        println!(
+            "{} {} {}",
+            xref.from, xref.entry_num, xref.actual_start_offset
+        );
 
         Ok(PDF {
             file: file,

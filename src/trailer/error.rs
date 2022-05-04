@@ -58,6 +58,7 @@ impl From<raw_byte_error::Error> for Error {
     fn from(e: raw_byte_error::Error) -> Self {
         match e {
             raw_byte_error::Error::EmptyBuffer => Self::EmptyBuffer,
+            raw_byte_error::Error::EOLNotFound => Self::TargetNotFound("\r\n".as_bytes().to_vec()),
             raw_byte_error::Error::TargetNotFound(vec) => Self::TargetNotFound(vec),
         }
     }
