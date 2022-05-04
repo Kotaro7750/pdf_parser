@@ -28,7 +28,7 @@ impl<'a> PDF<'a> {
             return Err(error::Error::NotPDF);
         }
 
-        PDF::parse_trailer(file, size);
+        let trailer = PDF::parse_trailer(file, size)?;
 
         Ok(PDF {
             file: file,
@@ -97,9 +97,35 @@ impl<'a> PDF<'a> {
 
         let buffer = &buffer[..n];
         let buffer = raw_byte::cut_from(buffer, "%%EOF".as_bytes())?;
+        println!("100");
 
-        println!("{:?}", buffer);
+        let startxref_bufer = raw_byte::extract_tail_after(buffer, "startxref".as_bytes())?;
+        println!("103");
 
-        Err(error::Error::NotPDF)
+        // 相互参照テーブルの開始オフセットを取得
+        let xref_offset = match parser::Parser::new(startxref_bufer)?.parse()? {
+            parser::Object::Integer(int) => int,
+            obj => {
+                println!("{:?}", obj);
+                return Err(error::Error::NotPDF);
+            }
+        };
+        println!("114");
+
+        // トレーラ辞書を取得
+        let trailer_dict_buffer = raw_byte::extract_after(buffer, "trailer".as_bytes())?;
+        let trailer_dict_buffer =
+            raw_byte::cut_tail_from(trailer_dict_buffer, "startxref".as_bytes())?;
+
+        let trailer_dict = match parser::Parser::new(trailer_dict_buffer)?.parse()? {
+            parser::Object::Dict(hm) => hm,
+            _ => return Err(error::Error::NotPDF),
+        };
+
+        println!("{:?}", trailer_dict);
+
+        Ok(Trailer {
+            xref_start_offset: xref_offset,
+        })
     }
 }

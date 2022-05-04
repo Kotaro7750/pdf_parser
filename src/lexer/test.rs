@@ -21,10 +21,7 @@ fn tokenize_space_eol() {
 
     lexer.tokenize().unwrap();
 
-    assert_eq_token_vec(
-        &lexer.token_vec,
-        &vec![Token::EOL, Token::EOL, Token::EOL, Token::EOL, Token::EOL],
-    )
+    assert_eq_token_vec(&lexer.token_vec, &vec![])
 }
 
 #[test]
@@ -36,7 +33,7 @@ fn tokenize_integer() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Integer(123), Token::Integer(-123), Token::EOL],
+        &vec![Token::Integer(123), Token::Integer(-123)],
     )
 }
 

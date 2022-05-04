@@ -254,7 +254,7 @@ impl<'a> Lexer<'a> {
                     is_comment = false;
                     self.skip_token();
                 } else {
-                    self.confirm_token(Token::EOL);
+                    self.skip_token();
                 }
 
                 continue;
@@ -273,7 +273,7 @@ impl<'a> Lexer<'a> {
                     is_comment = false;
                     self.skip_token();
                 } else {
-                    self.confirm_token(Token::EOL);
+                    self.skip_token();
                 }
 
                 continue;

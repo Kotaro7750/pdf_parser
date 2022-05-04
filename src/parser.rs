@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 pub mod error;
+use crate::error as api_error;
 use crate::lexer;
 use crate::lexer::Token;
 
@@ -8,7 +9,7 @@ use crate::lexer::Token;
 pub mod test;
 
 #[derive(PartialEq, Debug)]
-enum Object {
+pub enum Object {
     Boolean(bool),
     Integer(isize),
     Real(f64),
@@ -26,18 +27,18 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(buffer: &[u8]) -> Result<Parser, error::Error> {
+    pub fn new(buffer: &[u8]) -> Result<Parser, api_error::Error> {
         if buffer.len() == 0 {
-            return Err(error::Error::EmptyBuffer);
+            return Err(api_error::Error::Parser(error::Error::EmptyBuffer));
         };
 
         let mut lexer = match lexer::Lexer::new(buffer) {
             Ok(lexer) => lexer,
-            Err(e) => return Err(error::Error::Lexer(e)),
+            Err(e) => return Err(api_error::Error::Parser(error::Error::Lexer(e))),
         };
 
         if let Err(e) = lexer.tokenize() {
-            return Err(error::Error::Lexer(e));
+            return Err(api_error::Error::Parser(error::Error::Lexer(e)));
         };
 
         let token_vec = lexer.token_vec;
@@ -46,6 +47,13 @@ impl Parser {
             token_vec,
             token_i: 0,
         })
+    }
+
+    pub fn parse(&mut self) -> Result<Object, api_error::Error> {
+        match self.parse_object() {
+            Err(e) => Err(api_error::Error::Parser(e)),
+            Ok(obj) => Ok(obj),
+        }
     }
 
     fn next(&mut self) -> Option<&Token> {
@@ -67,7 +75,7 @@ impl Parser {
         }
     }
 
-    pub fn parse_object(&mut self) -> Result<Object, error::Error> {
+    fn parse_object(&mut self) -> Result<Object, error::Error> {
         let token = match self.next() {
             Some(token) => token,
             None => return Err(error::Error::NoToken),

@@ -1,10 +1,20 @@
 extern crate pdf_parser;
 
+use std::env;
 use std::fs::File;
 use std::process;
 
 fn main() {
-    let mut file = File::open("sample.pdf").unwrap_or_else(|err| {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        println!("Specify file name");
+        process::exit(1);
+    }
+
+    let filename = &args[1];
+
+    let mut file = File::open(filename).unwrap_or_else(|err| {
         println!("File cannot open: {}", err);
         process::exit(1);
     });
