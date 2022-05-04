@@ -1,14 +1,11 @@
-use crate::parser::error as parser_error;
+use crate::header;
+use crate::trailer::error as trailer_error;
 
 #[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),
-    NotPDF,
-    ParseInteger(std::num::ParseIntError),
-    Utf8Error(std::str::Utf8Error),
-    TargetNotFound,
-    CannotParse,
-    Parser(parser_error::Error),
+    Header(header::Error),
+    Trailer(trailer_error::Error),
 }
 
 impl From<std::io::Error> for Error {
@@ -17,15 +14,15 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<std::num::ParseIntError> for Error {
-    fn from(e: std::num::ParseIntError) -> Self {
-        Self::ParseInteger(e)
+impl From<trailer_error::Error> for Error {
+    fn from(e: trailer_error::Error) -> Self {
+        Self::Trailer(e)
     }
 }
 
-impl From<std::str::Utf8Error> for Error {
-    fn from(e: std::str::Utf8Error) -> Self {
-        Self::Utf8Error(e)
+impl From<header::Error> for Error {
+    fn from(e: header::Error) -> Self {
+        Self::Header(e)
     }
 }
 
@@ -33,12 +30,8 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::Io(e) => write!(f, "{}", e),
-            Error::NotPDF => write!(f, "This file is not valid pdf file"),
-            Error::ParseInteger(e) => write!(f, "{}", e),
-            Error::Utf8Error(e) => write!(f, "{}", e),
-            Error::TargetNotFound => write!(f, "Target Not Found"),
-            Error::CannotParse => write!(f, "Cannot Parse"),
-            Error::Parser(e) => write!(f, "Error in Parser: {}", e),
+            Error::Header(e) => write!(f, "Error on Parsing Header: {}", e),
+            Error::Trailer(e) => write!(f, "Error on Parsing Trailer: {}", e),
         }
     }
 }

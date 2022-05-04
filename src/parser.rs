@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 pub mod error;
-use crate::error as api_error;
 use crate::lexer;
 use crate::lexer::Token;
 
@@ -27,18 +26,18 @@ pub struct Parser {
 }
 
 impl Parser {
-    pub fn new(buffer: &[u8]) -> Result<Parser, api_error::Error> {
+    pub fn new(buffer: &[u8]) -> Result<Parser, error::Error> {
         if buffer.len() == 0 {
-            return Err(api_error::Error::Parser(error::Error::EmptyBuffer));
+            return Err(error::Error::EmptyBuffer);
         };
 
         let mut lexer = match lexer::Lexer::new(buffer) {
             Ok(lexer) => lexer,
-            Err(e) => return Err(api_error::Error::Parser(error::Error::Lexer(e))),
+            Err(e) => return Err(error::Error::Lexer(e)),
         };
 
         if let Err(e) = lexer.tokenize() {
-            return Err(api_error::Error::Parser(error::Error::Lexer(e)));
+            return Err(error::Error::Lexer(e));
         };
 
         let token_vec = lexer.token_vec;
@@ -49,11 +48,8 @@ impl Parser {
         })
     }
 
-    pub fn parse(&mut self) -> Result<Object, api_error::Error> {
-        match self.parse_object() {
-            Err(e) => Err(api_error::Error::Parser(e)),
-            Ok(obj) => Ok(obj),
-        }
+    pub fn parse(&mut self) -> Result<Object, error::Error> {
+        Ok(self.parse_object()?)
     }
 
     fn next(&mut self) -> Option<&Token> {
