@@ -22,6 +22,8 @@ pub enum Token {
     ArrayEnd,
     Null,
     IndirectRef(usize, usize),
+    IndirectObjStart(u64, u64),
+    IndirectObjEnd,
 }
 
 fn into_name(buffer: &[u8]) -> Result<String, error::Error> {
@@ -149,16 +151,17 @@ fn into_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
     Ok(vec)
 }
 
-// Streamオブジェクト・間接オブジェクト以外のオブジェクトの字句解析を行う
+// Streamオブジェクト以外のオブジェクトの字句解析を行う
 // Streamオブジェクトはバイト長が辞書によって指定されるためこの中でやろうとすると難しくなる
-// 間接オブジェクトはStreamオブジェクトを含む可能性がある
-// こういったオブジェクトは字句解析できるバイト列を切り取って範囲を絞って字句解析を行う
+// Streamオブジェクトは間接オブジェクトをパースしてから直接扱う
 pub struct Lexer<'a> {
     buffer: &'a [u8],
     i: usize,
     token_head_i: usize,
     byte: u8,
     char: char,
+    has_indirect_obj_start: bool,
+    has_indirect_obj_end: bool,
     pub token_vec: Vec<Token>,
 }
 
@@ -173,6 +176,8 @@ impl<'a> Lexer<'a> {
                 token_head_i: 0,
                 byte: buffer[0],
                 char: char::from(buffer[0]),
+                has_indirect_obj_start: false,
+                has_indirect_obj_end: false,
                 token_vec: vec![],
             })
         }
@@ -474,6 +479,40 @@ impl<'a> Lexer<'a> {
                 return Err(error::Error::InvalidIndirectRef(may_obj_num, may_gen_num));
             }
 
+            // 間接オブジェクト
+            if self.assume_and_move("obj".as_bytes()) {
+                let may_gen_num = self.token_vec.pop();
+                let may_obj_num = self.token_vec.pop();
+
+                if let (Some(Token::Integer(object_num)), Some(Token::Integer(generation_num))) =
+                    (&may_obj_num, &may_gen_num)
+                {
+                    if *object_num > 0 && *generation_num >= 0 {
+                        self.move_next_byte();
+                        self.confirm_token(Token::IndirectObjStart(
+                            *object_num as u64,
+                            *generation_num as u64,
+                        ));
+                        self.has_indirect_obj_start = true;
+                        continue;
+                    }
+                }
+            }
+
+            // 間接参照オブジェクトを読み終えたら強制的に字句解析を終了
+            if self.assume_and_move("endobj".as_bytes()) {
+                if self.move_next_byte() {
+                    if self.is_regular_char() {
+                        let str = str::from_utf8(&self.buffer[self.token_head_i..self.i]).unwrap();
+                        return Err(error::Error::UndefinedKeyword(String::from(str)));
+                    }
+                }
+
+                self.confirm_token(Token::IndirectObjEnd);
+                self.has_indirect_obj_end = true;
+                return Ok(());
+            }
+
             // Null
             if self.assume_and_move("null".as_bytes()) {
                 if self.move_next_byte() {
@@ -517,5 +556,15 @@ impl<'a> Lexer<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn has_mismatch_indirectobj(&self) -> bool {
+        self.has_indirect_obj_start ^ self.has_indirect_obj_end
+    }
+
+    pub fn tokenize_end_i(&self) -> u64 {
+        // TODO u64に統一
+        // 字句解析が終了したときにはtoken_head_iはちょうど次のバイトを指すようになっているので-1
+        self.token_head_i as u64 - 1
     }
 }

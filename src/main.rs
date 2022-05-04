@@ -4,6 +4,8 @@ use std::env;
 use std::fs::File;
 use std::process;
 
+use pdf_parser::PDF;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -19,8 +21,10 @@ fn main() {
         process::exit(1);
     });
 
-    let pdf = pdf_parser::PDF::new(&mut file).unwrap_or_else(|err| {
+    let mut pdf = pdf_parser::PDF::new(&mut file).unwrap_or_else(|err| {
         println!("{}", err);
         process::exit(1)
     });
+
+    pdf.get_indirect_obj();
 }

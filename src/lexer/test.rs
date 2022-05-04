@@ -103,7 +103,7 @@ fn tokenize_array() {
 }
 
 #[test]
-fn tokenize_indirect_obj() {
+fn tokenize_indirect_ref() {
     let buffer = "1 0 R".as_bytes();
     let mut lexer = Lexer::new(buffer).unwrap();
 
@@ -148,5 +148,23 @@ fn tokenize_bool_null() {
     assert_eq_token_vec(
         &lexer.token_vec,
         &vec![Token::Null, Token::Boolean(true), Token::Boolean(false)],
+    )
+}
+
+#[test]
+fn tokenize_indirect_obj() {
+    // endobjの後は強制的に停止する
+    let buffer = "1 0 obj\n123 endobj   hogehoge lkjdflkj)".as_bytes();
+    let mut lexer = Lexer::new(buffer).unwrap();
+
+    lexer.tokenize().unwrap();
+
+    assert_eq_token_vec(
+        &lexer.token_vec,
+        &vec![
+            Token::IndirectObjStart(1, 0),
+            Token::Integer(123),
+            Token::IndirectObjEnd,
+        ],
     )
 }

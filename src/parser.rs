@@ -18,10 +18,12 @@ pub enum Object {
     Null,
     IndirectRef(usize, usize),
     Dict(HashMap<String, Object>),
+    IndirectObj(Box<Object>),
 }
 
 pub struct Parser {
     token_i: usize,
+    lexer_end_i: u64,
     token_vec: Vec<Token>,
 }
 
@@ -40,16 +42,31 @@ impl Parser {
             return Err(error::Error::Lexer(e));
         };
 
+        if lexer.has_mismatch_indirectobj() {
+            return Err(error::Error::IndirectObjMissMatch);
+        }
+
+        let lexer_end_i = lexer.tokenize_end_i();
+
         let token_vec = lexer.token_vec;
 
         Ok(Parser {
             token_vec,
+            lexer_end_i,
             token_i: 0,
         })
     }
 
     pub fn parse(&mut self) -> Result<Object, error::Error> {
         Ok(self.parse_object()?)
+    }
+
+    // 返り値は(パースした間接オブジェクト,endobjキーワードのjを指すbuffer中のインデックス)
+    pub fn parse_indirect(&mut self) -> Result<(Object, u64), error::Error> {
+        match self.parse_object()? {
+            Object::IndirectObj(obj) => Ok((*obj, self.lexer_end_i)),
+            obj => return Err(error::Error::NotIndirectObj(obj)),
+        }
     }
 
     fn next(&mut self) -> Option<&Token> {
@@ -115,6 +132,10 @@ impl Parser {
 
         if let Token::DictStart = token {
             return Ok(Object::Dict(self.parse_dict_content()?));
+        }
+
+        if let Token::IndirectObjStart(obj_num, gen_num) = token {
+            return Ok(Object::IndirectObj(self.parse_indirect_content()?));
         }
 
         Err(error::Error::UnexpectedToken(token.clone()))
@@ -185,6 +206,17 @@ impl Parser {
                     return Err(error::Error::UnexpectedToken(token.clone()));
                 }
             }
+        }
+    }
+
+    fn parse_indirect_content(&mut self) -> Result<Box<Object>, error::Error> {
+        let obj = self.parse_object()?;
+
+        if let Some(Token::IndirectObjEnd) = self.next() {
+            Ok(Box::new(obj))
+        } else {
+            // TODO
+            Err(error::Error::NoToken)
         }
     }
 }

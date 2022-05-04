@@ -7,15 +7,14 @@ use std::str;
 use crate::raw_byte;
 use crate::trailer;
 
-pub struct XRef<'a> {
-    file: &'a File,
+pub struct XRef {
     pub actual_start_offset: u64,
     pub from: usize,
     pub entry_num: usize,
 }
 
-impl<'a> XRef<'a> {
-    pub fn new(file: &'a mut File, trailer_dict: &trailer::Trailer) -> XRef<'a> {
+impl XRef {
+    pub fn new(file: &mut File, trailer_dict: &trailer::Trailer) -> XRef {
         // TODO なぜ30?
         let mut buffer: [u8; 30] = [0; 30];
 
@@ -48,8 +47,7 @@ impl<'a> XRef<'a> {
         let eol_skipped = raw_byte::extract_after_eol(start_at_eol).unwrap();
         let actual_start_offset = (n - eol_skipped.len()) as u64 + trailer_dict.xref_start_offset;
 
-        XRef::<'a> {
-            file,
+        XRef {
             actual_start_offset,
             from,
             entry_num,
@@ -72,7 +70,7 @@ impl<'a> XRef<'a> {
         )
     }
 
-    pub fn get_object_byte_offset(&mut self, obj_num: usize, gen_num: u64) -> u64 {
+    pub fn get_object_byte_offset(&mut self, file: &mut File, obj_num: usize, gen_num: u64) -> u64 {
         if obj_num < self.from || (self.from + self.entry_num) <= obj_num {
             panic!("object is not in cross reference");
         }
@@ -84,9 +82,9 @@ impl<'a> XRef<'a> {
 
         let mut buffer: [u8; 18] = [0; 18];
 
-        self.file.seek(SeekFrom::Start(byte_offset)).unwrap();
+        file.seek(SeekFrom::Start(byte_offset)).unwrap();
 
-        if self.file.read(&mut buffer).unwrap() != 18 {
+        if file.read(&mut buffer).unwrap() != 18 {
             panic!("cannot read 18 byte");
         };
 

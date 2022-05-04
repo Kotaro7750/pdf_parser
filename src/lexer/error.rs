@@ -10,6 +10,7 @@ pub enum Error {
     InvalidObjectHead(u8),
     InvalidName(Vec<u8>),
     InvalidIndirectRef(Option<Token>, Option<Token>),
+    InvalidIndirectObj(Option<Token>, Option<Token>),
 }
 
 impl Error {
@@ -34,6 +35,20 @@ impl Error {
                 write!(
                     f,
                     "R keyword is used wrong context (Object number: {}, Generation Number: {})",
+                    match may_obj_num {
+                        Some(t) => format!("{:?}", t),
+                        None => format!("None"),
+                    },
+                    match may_gen_num {
+                        Some(t) => format!("{:?}", t),
+                        None => format!("None"),
+                    }
+                )
+            }
+            Error::InvalidIndirectObj(may_obj_num, may_gen_num) => {
+                write!(
+                    f,
+                    "obj keyword is used wrong context (Object number: {}, Generation Number: {})",
                     match may_obj_num {
                         Some(t) => format!("{:?}", t),
                         None => format!("None"),
