@@ -9,8 +9,8 @@ use crate::trailer;
 
 pub struct XRef {
     pub actual_start_offset: u64,
-    pub from: usize,
-    pub entry_num: usize,
+    pub from: u64,
+    pub entry_num: u64,
 }
 
 impl XRef {
@@ -31,7 +31,7 @@ impl XRef {
 
         // 何番目のオブジェクトのエントリから始まるかをパースする
         let from_buffer = raw_byte::cut_from(buffer, " ".as_bytes()).unwrap();
-        let from = usize::from_str_radix(str::from_utf8(from_buffer).unwrap(), 10).unwrap();
+        let from = u64::from_str_radix(str::from_utf8(from_buffer).unwrap(), 10).unwrap();
 
         // エントリ数のすぐ後にEOLが来るのでそのEOLから始まるバッファとの長さの差からエントリ数のバイト数を計算する
         let buffer = raw_byte::extract_after(buffer, " ".as_bytes()).unwrap();
@@ -40,8 +40,7 @@ impl XRef {
 
         // エントリ数をパースする
         let entry_num_buffer = &buffer[..entry_num_len];
-        let entry_num =
-            usize::from_str_radix(str::from_utf8(entry_num_buffer).unwrap(), 10).unwrap();
+        let entry_num = u64::from_str_radix(str::from_utf8(entry_num_buffer).unwrap(), 10).unwrap();
 
         // 2行の読み飛ばしが何バイトの読み飛ばしに相当するのかを計算しエントリが始まるバイトオフセットを計算する
         let eol_skipped = raw_byte::extract_after_eol(start_at_eol).unwrap();
@@ -70,13 +69,11 @@ impl XRef {
         )
     }
 
-    pub fn get_object_byte_offset(&mut self, file: &mut File, obj_num: usize, gen_num: u64) -> u64 {
+    pub fn get_object_byte_offset(&mut self, file: &mut File, obj_num: u64, gen_num: u64) -> u64 {
         if obj_num < self.from || (self.from + self.entry_num) <= obj_num {
             panic!("object is not in cross reference");
         }
 
-        // TODO usizeなのかu64なのかはっきり
-        // u64でいいよね
         // 1エントリはきっかり20バイトである
         let byte_offset = self.actual_start_offset + ((obj_num - self.from) * 20) as u64;
 
@@ -93,8 +90,6 @@ impl XRef {
         if gen != gen_num {
             panic!("generation number mismatch");
         }
-
-        println!("{} {} {}", offset, gen, is_n);
 
         offset
     }

@@ -7,6 +7,8 @@ mod cross_reference;
 mod error;
 mod header;
 mod lexer;
+mod object;
+mod page;
 mod parser;
 mod raw_byte;
 mod trailer;
@@ -22,11 +24,24 @@ impl<'a> PDF<'a> {
     pub fn new(file: &'a mut File) -> Result<PDF<'a>, error::Error> {
         let size = PDF::get_file_size(file)?;
 
-        let is_pdf = header::expect_pdf(file)?;
+        header::expect_pdf(file)?;
 
         let trailer = trailer::parse_trailer(file, size)?;
-
         let mut xref = cross_reference::XRef::new(file, &trailer);
+
+        // ドキュメントカタログ
+        let root_ref = trailer.get_root_catalog_ref();
+        let root_obj = object::get_indirect_obj(file, &mut xref, root_ref)?;
+        let root_obj = object::ensure_indirect_obj(&root_obj)?;
+
+        let root_hm = object::ensure_dict_with_key(root_obj, vec!["Type", "Pages"])?;
+
+        object::ensure_dict_type(root_hm, "Catalog")?;
+
+        let page_list_ref =
+            object::ensure_indirect_ref(root_hm.get(&String::from("Pages")).unwrap())?;
+
+        page::parse_page_list(file, &mut xref, page_list_ref)?;
 
         Ok(PDF {
             file: file,
@@ -38,24 +53,5 @@ impl<'a> PDF<'a> {
 
     fn get_file_size(file: &File) -> Result<u64, std::io::Error> {
         Ok(file.metadata()?.len())
-    }
-
-    pub fn get_indirect_obj(&mut self) -> Result<parser::Object, error::Error> {
-        let offset = self.xref.get_object_byte_offset(self.file, 10, 0);
-
-        self.file.seek(SeekFrom::Start(offset));
-
-        let mut buffer: [u8; 100] = [0; 100];
-
-        let n = self.file.read(&mut buffer)?;
-
-        println!("{:?}", buffer);
-
-        let mut p = parser::Parser::new(&buffer).unwrap();
-        let obj = p.parse().unwrap();
-
-        println!("{:?}", obj);
-
-        Ok(obj)
     }
 }

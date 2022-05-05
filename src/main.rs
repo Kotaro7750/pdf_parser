@@ -21,10 +21,8 @@ fn main() {
         process::exit(1);
     });
 
-    let mut pdf = pdf_parser::PDF::new(&mut file).unwrap_or_else(|err| {
+    let pdf = pdf_parser::PDF::new(&mut file).unwrap_or_else(|err| {
         println!("{}", err);
         process::exit(1)
     });
-
-    pdf.get_indirect_obj();
 }

@@ -21,7 +21,7 @@ pub enum Token {
     ArrayStart,
     ArrayEnd,
     Null,
-    IndirectRef(usize, usize),
+    IndirectRef(u64, u64),
     IndirectObjStart(u64, u64),
     IndirectObjEnd,
 }
@@ -469,8 +469,8 @@ impl<'a> Lexer<'a> {
                     if *object_num > 0 && *generation_num >= 0 {
                         self.move_next_byte();
                         self.confirm_token(Token::IndirectRef(
-                            *object_num as usize,
-                            *generation_num as usize,
+                            *object_num as u64,
+                            *generation_num as u64,
                         ));
                         continue;
                     }

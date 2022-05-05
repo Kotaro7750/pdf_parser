@@ -1,4 +1,6 @@
 use crate::header;
+use crate::object;
+use crate::page;
 use crate::trailer::error as trailer_error;
 
 #[derive(Debug)]
@@ -6,6 +8,8 @@ pub enum Error {
     Io(std::io::Error),
     Header(header::Error),
     Trailer(trailer_error::Error),
+    PageTree(page::Error),
+    Object(object::Error),
 }
 
 impl From<std::io::Error> for Error {
@@ -26,12 +30,26 @@ impl From<header::Error> for Error {
     }
 }
 
+impl From<object::Error> for Error {
+    fn from(e: object::Error) -> Self {
+        Self::Object(e)
+    }
+}
+
+impl From<page::Error> for Error {
+    fn from(e: page::Error) -> Self {
+        Self::PageTree(e)
+    }
+}
+
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::Io(e) => write!(f, "{}", e),
             Error::Header(e) => write!(f, "Error on Parsing Header: {}", e),
             Error::Trailer(e) => write!(f, "Error on Parsing Trailer: {}", e),
+            Error::PageTree(e) => write!(f, "Error on Page Tree: {:?}", e),
+            Error::Object(e) => write!(f, "Error on Parsing Object: {:?}", e),
         }
     }
 }

@@ -16,7 +16,7 @@ pub enum Object {
     String(Vec<u8>),
     Array(Vec<Object>),
     Null,
-    IndirectRef(usize, usize),
+    IndirectRef(u64, u64),
     Dict(HashMap<String, Object>),
     IndirectObj(Box<Object>),
 }

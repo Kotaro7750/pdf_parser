@@ -1,5 +1,6 @@
 use std::fmt;
 
+use crate::object;
 use crate::parser::error as parser_error;
 use crate::parser::Object;
 use crate::raw_byte::error as raw_byte_error;
@@ -11,8 +12,7 @@ pub enum Error {
     ParseXRefOffset(parser_error::Error),
     XRefOffsetNotInteger(Object),
     ParseTrailerDict(parser_error::Error),
-    TrailerDictNotDict(Object),
-    InvalidTrailerDict(String),
+    Object(object::Error),
 }
 
 impl Error {
@@ -28,10 +28,7 @@ impl Error {
             ),
             Error::XRefOffsetNotInteger(obj) => write!(f, "Object '{:?}' is not integer", obj),
             Error::ParseTrailerDict(e) => write!(f, "Error on parsing trailer dictionary: {}", e),
-            Error::TrailerDictNotDict(obj) => write!(f, "Object '{:?}' is not dictionary", obj),
-            Error::InvalidTrailerDict(str) => {
-                write!(f, "Trailer dictionary must contain '{}'", str)
-            }
+            Error::Object(e) => write!(f, "Error in object: {:?}", e),
         }
     }
 }
@@ -51,6 +48,12 @@ impl fmt::Debug for Error {
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
         Self::Io(e)
+    }
+}
+
+impl From<object::Error> for Error {
+    fn from(e: object::Error) -> Self {
+        Self::Object(e)
     }
 }
 
