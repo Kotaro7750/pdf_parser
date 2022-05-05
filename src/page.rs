@@ -14,6 +14,10 @@ impl From<object::Error> for Error {
     }
 }
 
+struct Page {
+    thumbnail: Option<(u64, u64)>,
+}
+
 pub fn parse_page_list(
     file: &mut File,
     xref: &mut XRef,

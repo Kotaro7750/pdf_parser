@@ -47,7 +47,7 @@ pub fn get_indirect_obj(
 
         let buffer = &buffer[..n];
 
-        let mut p = match parser::Parser::new(&buffer) {
+        let mut p = match parser::Parser::new(&buffer, offset) {
             Ok(p) => p,
             // bufferが足りなくて途中で切れてしまうと字句解析自体も失敗することがある
             // TODO これだけでいいのか？

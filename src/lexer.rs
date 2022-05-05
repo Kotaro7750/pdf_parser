@@ -24,6 +24,9 @@ pub enum Token {
     IndirectRef(u64, u64),
     IndirectObjStart(u64, u64),
     IndirectObjEnd,
+    // streamキーワードが表れたらそこで字句解析を終了するのでEndはない
+    // Streamバイト列が始まるバイトオフセット
+    StreamObjStart(u64),
 }
 
 fn into_name(buffer: &[u8]) -> Result<String, error::Error> {
@@ -156,6 +159,7 @@ fn into_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
 // Streamオブジェクトは間接オブジェクトをパースしてから直接扱う
 pub struct Lexer<'a> {
     buffer: &'a [u8],
+    buffer_start_offset: u64,
     i: usize,
     token_head_i: usize,
     byte: u8,
@@ -166,12 +170,13 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(buffer: &[u8]) -> Result<Lexer, error::Error> {
+    pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Result<Lexer, error::Error> {
         if buffer.len() == 0 {
             Err(error::Error::EmptyBuffer)
         } else {
             Ok(Lexer {
                 buffer,
+                buffer_start_offset,
                 i: 0,
                 token_head_i: 0,
                 byte: buffer[0],
@@ -221,6 +226,13 @@ impl<'a> Lexer<'a> {
             '\0' | '\t' | '\n' | '\x12' | '\r' | ' ' | '(' | ')' | '<' | '>' | '[' | ']' | '{'
             | '}' | '/' | '%' => false,
             _ => true,
+        }
+    }
+
+    fn is_eol(&self) -> bool {
+        match self.char {
+            '\n' | '\r' => true,
+            _ => false,
         }
     }
 
@@ -513,6 +525,33 @@ impl<'a> Lexer<'a> {
                 return Ok(());
             }
 
+            // ストリームオブジェクト
+            if self.assume_and_move("stream".as_bytes()) {
+                // 現在mというバイトを指している
+                // バイトmの1バイトとその後のEOLが最大2バイトあるのでStream先頭を把握するためには残り3バイト以上あることが必須
+                if (self.buffer.len() - self.i) < 3 {
+                    return Err(error::Error::CannotConfirmStream);
+                }
+
+                self.move_next_byte();
+                // streamキーワードの後は，LFかCRLFのみでCR単体は受け付けない
+                // cf. 仕様書 3.2.7 Stream Objects
+                if self.assume_and_move("\n".as_bytes()) || self.assume_and_move("\r\n".as_bytes())
+                {
+                    // パースしやすいように直前で間接オブジェクト自体は終了していることにする
+                    self.confirm_token(Token::IndirectObjEnd);
+                    self.has_indirect_obj_end = true;
+
+                    // 現在iはEOLを指しているので+1
+                    self.confirm_token(Token::StreamObjStart(
+                        self.buffer_start_offset + self.i as u64 + 1,
+                    ));
+                    return Ok(());
+                } else {
+                    return Err(error::Error::UnexpectedByte(self.byte, '\n'));
+                }
+            }
+
             // Null
             if self.assume_and_move("null".as_bytes()) {
                 if self.move_next_byte() {
@@ -560,11 +599,5 @@ impl<'a> Lexer<'a> {
 
     pub fn has_mismatch_indirectobj(&self) -> bool {
         self.has_indirect_obj_start ^ self.has_indirect_obj_end
-    }
-
-    pub fn tokenize_end_i(&self) -> u64 {
-        // TODO u64に統一
-        // 字句解析が終了したときにはtoken_head_iはちょうど次のバイトを指すようになっているので-1
-        self.token_head_i as u64 - 1
     }
 }

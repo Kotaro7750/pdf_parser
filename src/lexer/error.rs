@@ -7,6 +7,7 @@ pub enum Error {
     UndefinedKeyword(String),
     ParseNumber(String),
     FinishInObject,
+    CannotConfirmStream,
     InvalidObjectHead(u8),
     InvalidName(Vec<u8>),
     InvalidIndirectRef(Option<Token>, Option<Token>),
@@ -25,6 +26,7 @@ impl Error {
             Error::UndefinedKeyword(string) => write!(f, "UndefinedKeyword {}", string),
             Error::ParseNumber(string) => write!(f, "Cannot parse '{}' as Number", string),
             Error::FinishInObject => write!(f, "Buffer is finished within object"),
+            Error::CannotConfirmStream => write!(f, "Cannot confirm whether object is stream"),
             Error::InvalidObjectHead(byte) => {
                 write!(f, "Encounter not object header byte {}", byte)
             }

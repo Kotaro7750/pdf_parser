@@ -19,26 +19,28 @@ pub enum Object {
     IndirectRef(u64, u64),
     Dict(HashMap<String, Object>),
     IndirectObj(Box<Object>),
+    // ストリームバイト列が始まるバイトオフセット
+    StreamObj(Box<Object>, u64),
 }
 
 pub struct Parser {
     token_i: usize,
-    lexer_end_i: u64,
     token_vec: Vec<Token>,
 }
 
 impl Parser {
-    pub fn new(buffer: &[u8]) -> Result<Parser, error::Error> {
+    pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Result<Parser, error::Error> {
         if buffer.len() == 0 {
             return Err(error::Error::EmptyBuffer);
         };
 
-        let mut lexer = match lexer::Lexer::new(buffer) {
+        let mut lexer = match lexer::Lexer::new(buffer, buffer_start_offset) {
             Ok(lexer) => lexer,
             Err(e) => return Err(error::Error::Lexer(e)),
         };
 
         if let Err(e) = lexer.tokenize() {
+            println!("{}", e);
             return Err(error::Error::Lexer(e));
         };
 
@@ -46,27 +48,16 @@ impl Parser {
             return Err(error::Error::IndirectObjMissMatch);
         }
 
-        let lexer_end_i = lexer.tokenize_end_i();
-
         let token_vec = lexer.token_vec;
 
         Ok(Parser {
             token_vec,
-            lexer_end_i,
             token_i: 0,
         })
     }
 
     pub fn parse(&mut self) -> Result<Object, error::Error> {
         Ok(self.parse_object()?)
-    }
-
-    // 返り値は(パースした間接オブジェクト,endobjキーワードのjを指すbuffer中のインデックス)
-    pub fn parse_indirect(&mut self) -> Result<(Object, u64), error::Error> {
-        match self.parse_object()? {
-            Object::IndirectObj(obj) => Ok((*obj, self.lexer_end_i)),
-            obj => return Err(error::Error::NotIndirectObj(obj)),
-        }
     }
 
     fn next(&mut self) -> Option<&Token> {
@@ -134,8 +125,14 @@ impl Parser {
             return Ok(Object::Dict(self.parse_dict_content()?));
         }
 
-        if let Token::IndirectObjStart(obj_num, gen_num) = token {
-            return Ok(Object::IndirectObj(self.parse_indirect_content()?));
+        if let Token::IndirectObjStart(_, _) = token {
+            let obj = self.parse_indirect_content()?;
+
+            return if let Some(Token::StreamObjStart(offset)) = self.next() {
+                Ok(Object::StreamObj(obj, *offset))
+            } else {
+                Ok(Object::IndirectObj(obj))
+            };
         }
 
         Err(error::Error::UnexpectedToken(token.clone()))
