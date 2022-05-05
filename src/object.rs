@@ -13,10 +13,12 @@ use crate::parser::Object;
 pub enum Error {
     Io(std::io::Error),
     Parser(parser::error::Error),
+    NotInteger(String),
     NotDictionary(String),
     NotIndirectObj(String),
     NotIndirectRef(String),
     NotArray(String),
+    NotStream(String),
     ObjectRestriction(String),
     DictKeyNotFound(String),
     DictTypeMissMatch(String, String),
@@ -68,6 +70,40 @@ pub fn get_indirect_obj(
     }
 }
 
+pub fn get_stream<'a>(
+    file: &mut File,
+    xref: &mut cross_reference::XRef,
+    stream_obj: &'a Object,
+) -> Result<(&'a HashMap<String, Object>, Vec<u8>), Error> {
+    let (obj, offset) = ensure_stream(stream_obj)?;
+
+    let length = match obj.get(&"Length".to_string()).unwrap() {
+        Object::Integer(int) => *int as i64,
+        Object::IndirectRef(o, g) => ensure_integer(ensure_indirect_obj(&get_indirect_obj(
+            file,
+            xref,
+            (*o, *g),
+        )?)?)?,
+        o => return Err(Error::NotInteger(format!("{:?}", o))),
+    } as u64;
+
+    let byte_vec = get_stream_byte(file, offset, length)?;
+
+    Ok((obj, byte_vec))
+}
+
+fn get_stream_byte(file: &mut File, offset: u64, size: u64) -> Result<Vec<u8>, Error> {
+    let mut buffer = vec![0; size as usize];
+
+    file.seek(SeekFrom::Start(offset))?;
+
+    if file.read(&mut buffer)? as u64 != size {
+        panic!("Cannot read all");
+    };
+
+    Ok(buffer)
+}
+
 pub fn ensure_dict_with_key<'a>(
     obj: &'a Object,
     restriction: Vec<&'static str>,
@@ -85,6 +121,13 @@ pub fn ensure_dict_with_key<'a>(
     }
 
     Ok(dict)
+}
+
+pub fn ensure_integer(obj: &Object) -> Result<i64, Error> {
+    match obj {
+        Object::Integer(int) => Ok(*int as i64),
+        _ => Err(Error::NotInteger(format!("{:?}", obj))),
+    }
 }
 
 pub fn ensure_indirect_obj(obj: &Object) -> Result<&Object, Error> {
@@ -105,6 +148,16 @@ pub fn ensure_array(obj: &Object) -> Result<&Vec<Object>, Error> {
     match obj {
         Object::Array(vec) => Ok(vec),
         _ => Err(Error::NotArray(format!("{:?}", obj))),
+    }
+}
+
+pub fn ensure_stream(obj: &Object) -> Result<(&HashMap<String, Object>, u64), Error> {
+    match obj {
+        Object::StreamObj(may_dict, offset) => {
+            let map = ensure_dict_with_key(may_dict, vec!["Length"])?;
+            Ok((map, *offset))
+        }
+        _ => Err(Error::NotStream(format!("{:?}", obj))),
     }
 }
 

@@ -7,3 +7,5 @@ edition = "2021"
 
 [dependencies]
 regex = "1"
+flate2 = "1.0"
+bmp = "*"

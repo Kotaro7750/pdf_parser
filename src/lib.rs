@@ -1,7 +1,9 @@
+use bmp;
 use std::fs::File;
 use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom;
+use std::io::Write;
+
+use flate2::read::ZlibDecoder;
 
 mod cross_reference;
 mod error;
@@ -41,7 +43,43 @@ impl<'a> PDF<'a> {
         let page_list_ref =
             object::ensure_indirect_ref(root_hm.get(&String::from("Pages")).unwrap())?;
 
-        page::parse_page_list(file, &mut xref, page_list_ref)?;
+        let page_list = page::parse_page_list(file, &mut xref, page_list_ref)?;
+
+        for page in page_list {
+            if let Some(thumbnail_ref) = page.thumbnail {
+                let obj = object::get_indirect_obj(file, &mut xref, thumbnail_ref)?;
+                let (map, byte_vec) = object::get_stream(file, &mut xref, &obj)?;
+
+                println!("{:?}", map);
+
+                let width = object::ensure_integer(&map.get(&"Width".to_string()).unwrap())?;
+                let height = object::ensure_integer(&map.get(&"Height".to_string()).unwrap())?;
+
+                let mut deflater = ZlibDecoder::new(&byte_vec[..]);
+
+                let decoded: Result<Vec<u8>, _> = deflater.bytes().collect();
+                let decoded = decoded.unwrap();
+
+                let mut img = bmp::Image::new(width as u32, height as u32);
+
+                for x in 0..=(width - 1) {
+                    for y in 0..=(height - 1) {
+                        let offset = 3 * (width * y + x);
+                        img.set_pixel(
+                            x as u32,
+                            y as u32,
+                            bmp::Pixel::new(
+                                decoded[offset as usize],
+                                decoded[(offset + 1) as usize],
+                                decoded[(offset + 2) as usize],
+                            ),
+                        );
+                    }
+                }
+
+                img.save(format!("./{}", thumbnail_ref.0));
+            }
+        }
 
         Ok(PDF {
             file: file,

@@ -14,15 +14,15 @@ impl From<object::Error> for Error {
     }
 }
 
-struct Page {
-    thumbnail: Option<(u64, u64)>,
+pub struct Page {
+    pub thumbnail: Option<(u64, u64)>,
 }
 
 pub fn parse_page_list(
     file: &mut File,
     xref: &mut XRef,
     root_page_ref: (u64, u64),
-) -> Result<(), Error> {
+) -> Result<Vec<Page>, Error> {
     let root_node_obj = object::get_indirect_obj(file, xref, root_page_ref)?;
 
     let root_node_obj = object::ensure_indirect_obj(&root_node_obj)?;
@@ -32,21 +32,24 @@ pub fn parse_page_list(
 
     object::ensure_dict_type(root_node_map, "Pages")?;
 
+    let mut page_list = Vec::<Page>::new();
+
     let kids = root_node_map.get(&"Kids".to_string()).unwrap();
     let kids = object::ensure_array(kids)?;
 
     for kid in kids {
         let kid_ref = object::ensure_indirect_ref(kid)?;
-        parse_page_tree_node(file, xref, kid_ref)?;
+        parse_page_tree_node(file, xref, kid_ref, &mut page_list)?;
     }
 
-    Ok(())
+    Ok(page_list)
 }
 
 fn parse_page_tree_node(
     file: &mut File,
     xref: &mut XRef,
     node_ref: (u64, u64),
+    page_list: &mut Vec<Page>,
 ) -> Result<(), Error> {
     let node_obj = object::get_indirect_obj(file, xref, node_ref)?;
     let node_obj = object::ensure_indirect_obj(&node_obj)?;
@@ -56,6 +59,16 @@ fn parse_page_tree_node(
 
     if let Ok(_) = object::ensure_dict_type(node_map, "Page") {
         println!("page detected");
+
+        let may_thumnail_ref = if let Some(thumbnail_ref) = node_map.get(&"Thumb".to_string()) {
+            Some(object::ensure_indirect_ref(thumbnail_ref)?)
+        } else {
+            None
+        };
+
+        page_list.push(Page {
+            thumbnail: may_thumnail_ref,
+        });
     } else if let Ok(_) = object::ensure_dict_type(node_map, "Pages") {
         let node_map = object::ensure_dict_with_key(&node_obj, vec!["Kids", "Count"])?;
 
@@ -64,7 +77,7 @@ fn parse_page_tree_node(
 
         for kid in kids {
             let kid_ref = object::ensure_indirect_ref(kid)?;
-            parse_page_tree_node(file, xref, kid_ref)?;
+            parse_page_tree_node(file, xref, kid_ref, page_list)?;
         }
     } else {
         panic!("page nor pages");
