@@ -17,7 +17,7 @@ fn assert_eq_token_vec(v1: &Vec<Token>, v2: &Vec<Token>) {
 #[test]
 fn tokenize_space_eol() {
     let buffer = "\0\t\n\x0c\r \r\n \n\r".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -27,7 +27,7 @@ fn tokenize_space_eol() {
 #[test]
 fn tokenize_integer() {
     let buffer = " +123 -123\r".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -40,7 +40,7 @@ fn tokenize_integer() {
 #[test]
 fn tokenize_float() {
     let buffer = "1.5 -23.4 +110.0 .5 4. -.002 0.0".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -61,7 +61,7 @@ fn tokenize_float() {
 #[test]
 fn tokenize_hex_str() {
     let buffer = "<a0e0f>".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -71,7 +71,7 @@ fn tokenize_hex_str() {
 #[test]
 fn tokenize_string() {
     let buffer = "(hoge \t \\\\ \\053 (\\0053))".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -86,7 +86,7 @@ fn tokenize_string() {
 #[test]
 fn tokenize_array() {
     let buffer = "[123 (aa\\() -55.]".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -105,7 +105,7 @@ fn tokenize_array() {
 #[test]
 fn tokenize_indirect_ref() {
     let buffer = "1 0 R".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -115,7 +115,7 @@ fn tokenize_indirect_ref() {
 #[test]
 fn tokenize_name() {
     let buffer = "/Name..;$@?! ".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -128,7 +128,7 @@ fn tokenize_name() {
 #[test]
 fn tokenize_comment() {
     let buffer = "/Name%hogehoge /..<>(){}[]\r\n123".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -141,7 +141,7 @@ fn tokenize_comment() {
 #[test]
 fn tokenize_bool_null() {
     let buffer = "null true false".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 
@@ -155,7 +155,7 @@ fn tokenize_bool_null() {
 fn tokenize_indirect_obj() {
     // endobjの後は強制的に停止する
     let buffer = "1 0 obj\n123 endobj   hogehoge lkjdflkj)".as_bytes();
-    let mut lexer = Lexer::new(buffer).unwrap();
+    let mut lexer = Lexer::new(buffer, 0).unwrap();
 
     lexer.tokenize().unwrap();
 

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 fn parse_integer() {
     let buffer = "123".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     assert_eq!(obj, Object::Integer(123));
@@ -15,7 +15,7 @@ fn parse_integer() {
 fn parse_real() {
     let buffer = "-123.".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     assert_eq!(obj, Object::Real(-123.0));
@@ -25,7 +25,7 @@ fn parse_real() {
 fn parse_boolean() {
     let buffer = "true".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     assert_eq!(obj, Object::Boolean(true));
@@ -35,7 +35,7 @@ fn parse_boolean() {
 fn parse_null() {
     let buffer = "null".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     assert_eq!(obj, Object::Null);
@@ -45,7 +45,7 @@ fn parse_null() {
 fn parse_indirect_ref() {
     let buffer = "1 0 R".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     assert_eq!(obj, Object::IndirectRef(1, 0));
@@ -55,7 +55,7 @@ fn parse_indirect_ref() {
 fn parse_string_1() {
     let buffer = "(hoge)".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     assert_eq!(obj, Object::String(vec![104, 111, 103, 101]));
@@ -65,7 +65,7 @@ fn parse_string_1() {
 fn parse_array_1() {
     let buffer = "[  123  true \n  -12.[2 1 R\nnull] ]".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     assert_eq!(
@@ -83,7 +83,7 @@ fn parse_array_1() {
 fn parse_dict_1() {
     let buffer = "<</hoge 1 0 R\n/fuga <</arr [123\n/name]>>>>".as_bytes();
 
-    let mut parser = Parser::new(buffer).unwrap();
+    let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
     let mut hm = HashMap::new();

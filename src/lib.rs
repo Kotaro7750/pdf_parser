@@ -77,7 +77,7 @@ impl<'a> PDF<'a> {
                     }
                 }
 
-                img.save(format!("./{}", thumbnail_ref.0));
+                //img.save(format!("./{}", thumbnail_ref.0));
             }
         }
 
