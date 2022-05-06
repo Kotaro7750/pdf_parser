@@ -1,3 +1,4 @@
+use std::cmp;
 use std::fs::File;
 use std::io::Read;
 use std::io::Seek;
@@ -24,7 +25,7 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
     // 少なくともファイル末尾1024バイトにEOFマーカーが表れることは保証していい
     // cf. version1.7の仕様書 Appendix H の Implementation Note 18
     let mut buffer: [u8; 1024] = [0; 1024];
-    let byte_offset = filesize - 1024;
+    let byte_offset = cmp::max(filesize, 1024) - 1024;
 
     file.seek(std::io::SeekFrom::Start(byte_offset))?;
 
@@ -44,6 +45,7 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
     };
 
     let xref_offset = match parser.parse() {
+        // XXX ファイルサイズを超えるオフセットが指定されたときの対処
         Ok(parser::Object::Integer(int)) if int > 0 => int,
         Ok(obj) => {
             return Err(error::Error::XRefOffsetNotInteger(obj));
