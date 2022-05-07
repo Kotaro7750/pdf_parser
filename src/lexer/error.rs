@@ -1,78 +1,69 @@
 use super::Token;
 use std::fmt;
 
+#[derive(Debug)]
 pub enum Error {
     EmptyBuffer,
     UnexpectedByte(u8, char),
-    UndefinedKeyword(String),
-    ParseNumber(String),
+    UndefinedKeyword(Vec<u8>),
     FinishInObject,
     CannotConfirmStream,
-    InvalidObjectHead(u8),
-    InvalidName(Vec<u8>),
+    ParseNumber(String),
+    ParseName(Vec<u8>),
+    ParseHexString(Vec<u8>),
     InvalidIndirectRef(Option<Token>, Option<Token>),
     InvalidIndirectObj(Option<Token>, Option<Token>),
 }
 
-impl Error {
-    fn common_fmt(self: &Error, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            Error::EmptyBuffer => write!(f, "Buffer is Empty"),
-            Error::UnexpectedByte(byte, expected) => write!(
-                f,
-                "Encounter unexpected byte {}: Expected {}",
-                byte, expected
-            ),
-            Error::UndefinedKeyword(string) => write!(f, "UndefinedKeyword {}", string),
-            Error::ParseNumber(string) => write!(f, "Cannot parse '{}' as Number", string),
-            Error::FinishInObject => write!(f, "Buffer is finished within object"),
-            Error::CannotConfirmStream => write!(f, "Cannot confirm whether object is stream"),
-            Error::InvalidObjectHead(byte) => {
-                write!(f, "Encounter not object header byte {}", byte)
+            Error::EmptyBuffer => write!(f, "buffer is empty"),
+            Error::UnexpectedByte(byte, expected) => {
+                write!(f, "unexpected byte `{}`: expect `{}`", byte, expected)
             }
-            Error::InvalidName(vec) => {
-                write!(f, "Cannot convert byte '{:?}' into valid Name", vec)
+            Error::UndefinedKeyword(vec) => write!(f, "undefined keyword `{:?}`", vec),
+            Error::ParseNumber(string) => write!(f, "cannot parse `{}` as number", string),
+            Error::FinishInObject => write!(f, "buffer is finished within object"),
+            Error::CannotConfirmStream => {
+                write!(f, "cannot confirm stream buffer start in this buffer range")
+            }
+            Error::ParseName(vec) => {
+                write!(f, "cannot parse byte `{:?}` into valid name", vec)
+            }
+            Error::ParseHexString(vec) => {
+                write!(f, "cannot parse byte `{:?}` into hex string", vec)
             }
             Error::InvalidIndirectRef(may_obj_num, may_gen_num) => {
                 write!(
                     f,
-                    "R keyword is used wrong context (Object number: {}, Generation Number: {})",
+                    "R keyword is used wrong context (object number: `{}`, generation number: `{}`)",
                     match may_obj_num {
                         Some(t) => format!("{:?}", t),
-                        None => format!("None"),
+                        None => format!("none"),
                     },
                     match may_gen_num {
                         Some(t) => format!("{:?}", t),
-                        None => format!("None"),
+                        None => format!("none"),
                     }
                 )
             }
             Error::InvalidIndirectObj(may_obj_num, may_gen_num) => {
                 write!(
                     f,
-                    "obj keyword is used wrong context (Object number: {}, Generation Number: {})",
+                    "obj keyword is used wrong context (object number: `{}`, generation number: `{}`)",
                     match may_obj_num {
                         Some(t) => format!("{:?}", t),
-                        None => format!("None"),
+                        None => format!("none"),
                     },
                     match may_gen_num {
                         Some(t) => format!("{:?}", t),
-                        None => format!("None"),
+                        None => format!("none"),
                     }
                 )
             }
         }
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.common_fmt(f)
-    }
-}
-
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.common_fmt(f)
     }
 }

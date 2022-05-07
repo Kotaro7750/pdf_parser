@@ -29,19 +29,20 @@ pub enum Token {
     StreamObjStart(u64),
 }
 
-fn into_name(buffer: &[u8]) -> Result<String, error::Error> {
+fn parse_name(buffer: &[u8]) -> Result<String, error::Error> {
     if !buffer.is_ascii() {
-        Err(error::Error::InvalidName(buffer.to_vec()))
+        Err(error::Error::ParseName(buffer.to_vec()))
     } else {
-        // 全部ASCIIなのでUTFエラーは起こらないはず
+        // 全部ASCIIなのでunwrapしても問題ない
         Ok(String::from_utf8(buffer.to_vec()).unwrap())
     }
 }
 
 // 並んだバイト列をエスケープシーケンスを解釈したバイト列にして返す
-fn into_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
+fn parse_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
     let mut vec: Vec<u8> = vec![];
     let mut i = 0;
+
     let mut octal_string = String::new();
     let mut is_in_octal = false;
 
@@ -116,17 +117,16 @@ fn into_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
 
 // 並んだバイト列を16進数文字列の1桁とみなし，2桁をまとめて1バイトの16進数として解釈した数列を返す
 // 奇数桁しかない場合には最後に暗黙の0を補う
-fn into_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
+fn parse_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
     let mut vec: Vec<u8> = vec![];
     let mut i = 0;
 
-    let mut string: String = String::from("");
+    let mut hex_string: String = String::new();
 
     while i < buffer.len() {
         let byte = buffer[i];
         if !byte.is_ascii_hexdigit() {
-            // TODO エラー
-            return Err(error::Error::EmptyBuffer);
+            return Err(error::Error::ParseHexString(buffer.to_vec()));
         }
 
         // byteをASCII文字と見て文字（列）にする
@@ -134,12 +134,12 @@ fn into_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
         let str_slice = str::from_utf8(&buffer[i..i + 1]).unwrap();
 
         if i % 2 == 0 {
-            string = String::from(str_slice);
+            hex_string = String::from(str_slice);
         } else {
-            string.push_str(str_slice);
+            hex_string.push_str(str_slice);
             // 16進数文字列であることは確定しているのでunwrapしていい
-            vec.push(u8::from_str_radix(string.as_str(), 16).unwrap());
-            string = String::from("");
+            vec.push(u8::from_str_radix(hex_string.as_str(), 16).unwrap());
+            hex_string = String::new();
         }
 
         i += 1;
@@ -147,16 +147,14 @@ fn into_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
 
     // 奇数桁だったら最終桁に0を補う
     if buffer.len() % 2 == 1 {
-        string.push_str("0");
-        vec.push(u8::from_str_radix(string.as_str(), 16).unwrap());
+        hex_string.push_str("0");
+        vec.push(u8::from_str_radix(hex_string.as_str(), 16).unwrap());
     }
 
     Ok(vec)
 }
 
-// Streamオブジェクト以外のオブジェクトの字句解析を行う
-// Streamオブジェクトはバイト長が辞書によって指定されるためこの中でやろうとすると難しくなる
-// Streamオブジェクトは間接オブジェクトをパースしてから直接扱う
+// PDFオブジェクトの字句解析を行う
 pub struct Lexer<'a> {
     buffer: &'a [u8],
     buffer_start_offset: u64,
@@ -188,10 +186,6 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn tokenize(&mut self) -> Result<(), error::Error> {
-        Ok(self._tokenize()?)
-    }
-
     fn move_next_byte(&mut self) -> bool {
         self.i += 1;
 
@@ -205,11 +199,13 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    // tokenをトークン列に加えトークン先頭カーソルを移動させる
     fn confirm_token(&mut self, token: Token) {
         self.token_vec.push(token);
         self.token_head_i = self.i;
     }
 
+    // 現在のトークンを無視してトークン先頭カーソルを移動させる
     fn skip_token(&mut self) {
         self.token_head_i = self.i;
     }
@@ -229,14 +225,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn is_eol(&self) -> bool {
-        match self.char {
-            '\n' | '\r' => true,
-            _ => false,
-        }
-    }
-
-    // もしtargetと一致するならカーソルをtargetの最後まで移動させる
+    // カーソル下のバイト列がtargetバイト列と一致するならカーソルをtargetの最後まで移動させる
     // 一致しないなら何もしない
     fn assume_and_move(&mut self, target: &[u8]) -> bool {
         if target.len() == 0 {
@@ -257,9 +246,25 @@ impl<'a> Lexer<'a> {
         true
     }
 
-    // オブジェクト境界で区切られたbufferが入力されることを想定
-    // オブジェクトの途中で区切られたbufferを許容することも可能だがstreamの途中で切られたbufferが来てしまうとわけの分からないトークンを吐き続けてしまう
-    fn _tokenize(&mut self) -> Result<(), error::Error> {
+    // 現在キーワード末尾を指しているカーソルの次の文字がbuffer終端やデリミタであることを期待
+    fn expect_keyword_end(&mut self) -> Result<(), error::Error> {
+        if self.move_next_byte() && self.is_regular_char() {
+            // 現在カーソル先頭はキーワード文字列の次の文字を指しているのでその文字も含めるために+1
+            Err(error::Error::UndefinedKeyword(
+                (&self.buffer[self.token_head_i..(self.i + 1)]).to_vec(),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn has_unbalanced_indirectobj(&self) -> bool {
+        self.has_indirect_obj_start ^ self.has_indirect_obj_end
+    }
+
+    // オブジェクト境界で区切られたbufferが入力されることを想定してbufferを字句解析する
+    // 基本的に1つのオブジェクトの字句解析を目的としているのでstreamキーワードやendobjキーワードが来たらその時点で強制的に終了する
+    pub fn tokenize(&mut self) -> Result<(), error::Error> {
         let mut is_comment = false;
 
         while self.token_head_i < self.buffer.len() {
@@ -354,7 +359,7 @@ impl<'a> Lexer<'a> {
                 }
 
                 //  この時点でtoken_head_iは/を指しているので token_head_i + 1
-                self.confirm_token(Token::Name(into_name(
+                self.confirm_token(Token::Name(parse_name(
                     &self.buffer[(self.token_head_i + 1)..self.i],
                 )?));
                 continue;
@@ -386,7 +391,7 @@ impl<'a> Lexer<'a> {
                 }
 
                 // token_head_iは<を指しているので token_head_i ではなく token_head_i + 1
-                let token = Token::HexStr(into_hex_string(
+                let token = Token::HexStr(parse_hex_string(
                     &self.buffer[(self.token_head_i + 1)..self.i],
                 )?);
 
@@ -449,7 +454,7 @@ impl<'a> Lexer<'a> {
 
                 // token_head_iは(を，iは)を指しているので token_head_i ではなく token_head_i + 1
                 let token =
-                    Token::String(into_string(&self.buffer[(self.token_head_i + 1)..self.i])?);
+                    Token::String(parse_string(&self.buffer[(self.token_head_i + 1)..self.i])?);
 
                 self.move_next_byte();
                 self.confirm_token(token);
@@ -513,12 +518,7 @@ impl<'a> Lexer<'a> {
 
             // 間接参照オブジェクトを読み終えたら強制的に字句解析を終了
             if self.assume_and_move("endobj".as_bytes()) {
-                if self.move_next_byte() {
-                    if self.is_regular_char() {
-                        let str = str::from_utf8(&self.buffer[self.token_head_i..self.i]).unwrap();
-                        return Err(error::Error::UndefinedKeyword(String::from(str)));
-                    }
-                }
+                self.expect_keyword_end()?;
 
                 self.confirm_token(Token::IndirectObjEnd);
                 self.has_indirect_obj_end = true;
@@ -526,6 +526,7 @@ impl<'a> Lexer<'a> {
             }
 
             // ストリームオブジェクト
+            // ストリームバイト列が始まるファイル内オフセットを計算して字句解析を終了する
             if self.assume_and_move("stream".as_bytes()) {
                 // 現在mというバイトを指している
                 // バイトmの1バイトとその後のEOLが最大2バイトあるのでStream先頭を把握するためには残り3バイト以上あることが必須
@@ -534,6 +535,7 @@ impl<'a> Lexer<'a> {
                 }
 
                 self.move_next_byte();
+
                 // streamキーワードの後は，LFかCRLFのみでCR単体は受け付けない
                 // cf. 仕様書 3.2.7 Stream Objects
                 if self.assume_and_move("\n".as_bytes()) || self.assume_and_move("\r\n".as_bytes())
@@ -542,10 +544,11 @@ impl<'a> Lexer<'a> {
                     self.confirm_token(Token::IndirectObjEnd);
                     self.has_indirect_obj_end = true;
 
-                    // 現在iはEOLを指しているので+1
+                    // 現在iはEOLを指しておりストリーム先頭はその次なので+1
                     self.confirm_token(Token::StreamObjStart(
                         self.buffer_start_offset + self.i as u64 + 1,
                     ));
+
                     return Ok(());
                 } else {
                     return Err(error::Error::UnexpectedByte(self.byte, '\n'));
@@ -554,12 +557,7 @@ impl<'a> Lexer<'a> {
 
             // Null
             if self.assume_and_move("null".as_bytes()) {
-                if self.move_next_byte() {
-                    if self.is_regular_char() {
-                        let str = str::from_utf8(&self.buffer[self.token_head_i..self.i]).unwrap();
-                        return Err(error::Error::UndefinedKeyword(String::from(str)));
-                    }
-                }
+                self.expect_keyword_end()?;
 
                 self.confirm_token(Token::Null);
                 continue;
@@ -567,12 +565,7 @@ impl<'a> Lexer<'a> {
 
             // True
             if self.assume_and_move("true".as_bytes()) {
-                if self.move_next_byte() {
-                    if self.is_regular_char() {
-                        let str = str::from_utf8(&self.buffer[self.token_head_i..self.i]).unwrap();
-                        return Err(error::Error::UndefinedKeyword(String::from(str)));
-                    }
-                }
+                self.expect_keyword_end()?;
 
                 self.confirm_token(Token::Boolean(true));
                 continue;
@@ -580,24 +573,17 @@ impl<'a> Lexer<'a> {
 
             // False
             if self.assume_and_move("false".as_bytes()) {
-                if self.move_next_byte() {
-                    if self.is_regular_char() {
-                        let str = str::from_utf8(&self.buffer[self.token_head_i..self.i]).unwrap();
-                        return Err(error::Error::UndefinedKeyword(String::from(str)));
-                    }
-                }
+                self.expect_keyword_end()?;
 
                 self.confirm_token(Token::Boolean(false));
                 continue;
             }
 
-            return Err(error::Error::InvalidObjectHead(self.byte));
+            return Err(error::Error::UndefinedKeyword(
+                (&self.buffer[self.token_head_i..(self.i + 1)]).to_vec(),
+            ));
         }
 
         Ok(())
-    }
-
-    pub fn has_mismatch_indirectobj(&self) -> bool {
-        self.has_indirect_obj_start ^ self.has_indirect_obj_end
     }
 }

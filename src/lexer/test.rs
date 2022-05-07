@@ -139,7 +139,7 @@ fn tokenize_comment() {
 }
 
 #[test]
-fn tokenize_bool_null() {
+fn tokenize_boolean_null() {
     let buffer = "null true false".as_bytes();
     let mut lexer = Lexer::new(buffer, 0).unwrap();
 

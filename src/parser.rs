@@ -44,7 +44,7 @@ impl Parser {
             return Err(error::Error::Lexer(e));
         };
 
-        if lexer.has_mismatch_indirectobj() {
+        if lexer.has_unbalanced_indirectobj() {
             return Err(error::Error::IndirectObjMissMatch);
         }
 
