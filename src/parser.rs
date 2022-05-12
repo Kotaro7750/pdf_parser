@@ -40,7 +40,6 @@ impl Parser {
         };
 
         if let Err(e) = lexer.tokenize() {
-            println!("{}", e);
             return Err(error::Error::Lexer(e));
         };
 

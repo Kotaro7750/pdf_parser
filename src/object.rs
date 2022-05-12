@@ -14,6 +14,7 @@ pub enum Error {
     Io(std::io::Error),
     Parser(parser::error::Error),
     NotInteger(String),
+    NotName(String),
     NotDictionary(String),
     NotIndirectObj(String),
     NotIndirectRef(String),
@@ -32,7 +33,7 @@ impl From<std::io::Error> for Error {
 
 pub fn get_indirect_obj(
     file: &mut File,
-    xref: &mut cross_reference::XRef,
+    xref: &cross_reference::XRef,
     indirect: (u64, u64),
 ) -> Result<Object, Error> {
     let offset = xref.get_object_byte_offset(file, indirect.0, indirect.1);
@@ -72,12 +73,14 @@ pub fn get_indirect_obj(
 
 pub fn get_stream<'a>(
     file: &mut File,
-    xref: &mut cross_reference::XRef,
+    xref: &cross_reference::XRef,
     stream_obj: &'a Object,
-) -> Result<(&'a HashMap<String, Object>, Vec<u8>), Error> {
+) -> Result<(&'a Object, Vec<u8>), Error> {
     let (obj, offset) = ensure_stream(stream_obj)?;
 
-    let length = match obj.get(&"Length".to_string()).unwrap() {
+    let hm = ensure_dict_with_key(obj, vec![])?;
+
+    let length = match hm.get(&"Length".to_string()).unwrap() {
         Object::Integer(int) => *int as i64,
         Object::IndirectRef(o, g) => ensure_integer(ensure_indirect_obj(&get_indirect_obj(
             file,
@@ -130,6 +133,13 @@ pub fn ensure_integer(obj: &Object) -> Result<i64, Error> {
     }
 }
 
+pub fn ensure_name(obj: &Object) -> Result<String, Error> {
+    match obj {
+        Object::Name(str) => Ok(str.clone()),
+        _ => Err(Error::NotName(format!("{:?}", obj))),
+    }
+}
+
 pub fn ensure_indirect_obj(obj: &Object) -> Result<&Object, Error> {
     match obj {
         Object::IndirectObj(inner) => Ok(inner.as_ref()),
@@ -151,11 +161,11 @@ pub fn ensure_array(obj: &Object) -> Result<&Vec<Object>, Error> {
     }
 }
 
-pub fn ensure_stream(obj: &Object) -> Result<(&HashMap<String, Object>, u64), Error> {
+pub fn ensure_stream(obj: &Object) -> Result<(&Object, u64), Error> {
     match obj {
         Object::StreamObj(may_dict, offset) => {
             let map = ensure_dict_with_key(may_dict, vec!["Length"])?;
-            Ok((map, *offset))
+            Ok((may_dict, *offset))
         }
         _ => Err(Error::NotStream(format!("{:?}", obj))),
     }

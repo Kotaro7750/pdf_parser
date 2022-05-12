@@ -69,7 +69,7 @@ impl XRef {
         )
     }
 
-    pub fn get_object_byte_offset(&mut self, file: &mut File, obj_num: u64, gen_num: u64) -> u64 {
+    pub fn get_object_byte_offset(&self, file: &mut File, obj_num: u64, gen_num: u64) -> u64 {
         if obj_num < self.from || (self.from + self.entry_num) <= obj_num {
             panic!("object is not in cross reference");
         }

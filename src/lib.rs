@@ -1,13 +1,10 @@
-use bmp;
+use ::image as image_lib;
 use std::fs::File;
-use std::io::Read;
-use std::io::Write;
-
-use flate2::read::ZlibDecoder;
 
 mod cross_reference;
 mod error;
 mod header;
+mod image;
 mod lexer;
 mod object;
 mod page;
@@ -20,6 +17,7 @@ pub struct PDF<'a> {
     size: u64,
     trailer: trailer::Trailer,
     xref: cross_reference::XRef,
+    pages: Vec<page::Page>,
 }
 
 impl<'a> PDF<'a> {
@@ -40,56 +38,34 @@ impl<'a> PDF<'a> {
 
         object::ensure_dict_type(root_hm, "Catalog")?;
 
-        let page_list_ref =
-            object::ensure_indirect_ref(root_hm.get(&String::from("Pages")).unwrap())?;
+        let pages_ref = object::ensure_indirect_ref(root_hm.get(&String::from("Pages")).unwrap())?;
 
-        let page_list = page::parse_page_list(file, &mut xref, page_list_ref)?;
-
-        for page in page_list {
-            if let Some(thumbnail_ref) = page.thumbnail {
-                let obj = object::get_indirect_obj(file, &mut xref, thumbnail_ref)?;
-                let (map, byte_vec) = object::get_stream(file, &mut xref, &obj)?;
-
-                println!("{:?}", map);
-
-                let width = object::ensure_integer(&map.get(&"Width".to_string()).unwrap())?;
-                let height = object::ensure_integer(&map.get(&"Height".to_string()).unwrap())?;
-
-                let mut deflater = ZlibDecoder::new(&byte_vec[..]);
-
-                let decoded: Result<Vec<u8>, _> = deflater.bytes().collect();
-                let decoded = decoded.unwrap();
-
-                let mut img = bmp::Image::new(width as u32, height as u32);
-
-                for x in 0..=(width - 1) {
-                    for y in 0..=(height - 1) {
-                        let offset = 3 * (width * y + x);
-                        img.set_pixel(
-                            x as u32,
-                            y as u32,
-                            bmp::Pixel::new(
-                                decoded[offset as usize],
-                                decoded[(offset + 1) as usize],
-                                decoded[(offset + 2) as usize],
-                            ),
-                        );
-                    }
-                }
-
-                //img.save(format!("./{}", thumbnail_ref.0));
-            }
-        }
+        let pages = page::parse_page_list(file, &mut xref, pages_ref)?;
 
         Ok(PDF {
             file: file,
             size: size,
             trailer,
             xref,
+            pages,
         })
     }
 
     fn get_file_size(file: &File) -> Result<u64, std::io::Error> {
         Ok(file.metadata()?.len())
+    }
+
+    pub fn extract_image(
+        &mut self,
+        request_pages: &Vec<usize>,
+    ) -> Result<Vec<Vec<image_lib::RgbImage>>, error::Error> {
+        let mut images_of_pages: Vec<Vec<image_lib::RgbImage>> = vec![];
+        for page_number in request_pages {
+            let page = &self.pages[*page_number - 1];
+
+            images_of_pages.push(page.extract_image(&mut self.file, &self.xref).unwrap());
+        }
+
+        Ok(images_of_pages)
     }
 }

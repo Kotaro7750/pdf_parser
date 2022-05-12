@@ -21,8 +21,14 @@ fn main() {
         process::exit(1);
     });
 
-    let pdf = pdf_parser::PDF::new(&mut file).unwrap_or_else(|err| {
+    let mut pdf = pdf_parser::PDF::new(&mut file).unwrap_or_else(|err| {
         println!("{}", err);
         process::exit(1)
     });
+
+    for (page_number, images) in pdf.extract_image(&vec![30, 31]).unwrap().iter().enumerate() {
+        for (image_number, image) in images.iter().enumerate() {
+            image.save(format!("{}-{}.png", page_number, image_number));
+        }
+    }
 }
