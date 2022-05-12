@@ -3,24 +3,26 @@ use std::fmt;
 use crate::object;
 use crate::parser::error as parser_error;
 use crate::parser::Object;
-use crate::raw_byte::error as raw_byte_error;
 
+#[derive(Debug)]
 pub enum Error {
-    EmptyBuffer,
     Io(std::io::Error),
-    TargetNotFound(Vec<u8>),
+    EOFNotFound,
+    StartXRefNotFound,
+    TrailerNotFound,
     ParseXRefOffset(parser_error::Error),
     XRefOffsetNotInteger(Object),
     ParseTrailerDict(parser_error::Error),
     Object(object::Error),
 }
 
-impl Error {
-    fn common_fmt(self: &Error, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            Error::EmptyBuffer => write!(f, "Buffer is empty"),
             Error::Io(e) => write!(f, "Error of IO: {}", e),
-            Error::TargetNotFound(str) => write!(f, "Target '{:?}' not found in buffer", str),
+            Error::EOFNotFound => write!(f, "EOF marker is not found"),
+            Error::StartXRefNotFound => write!(f, "startxref is not found"),
+            Error::TrailerNotFound => write!(f, "trailer is not found"),
             Error::ParseXRefOffset(e) => write!(
                 f,
                 "Error on parsing byte offset of cross reference table: {}",
@@ -33,17 +35,7 @@ impl Error {
     }
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.common_fmt(f)
-    }
-}
-
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.common_fmt(f)
-    }
-}
+impl std::error::Error for Error {}
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
@@ -54,15 +46,5 @@ impl From<std::io::Error> for Error {
 impl From<object::Error> for Error {
     fn from(e: object::Error) -> Self {
         Self::Object(e)
-    }
-}
-
-impl From<raw_byte_error::Error> for Error {
-    fn from(e: raw_byte_error::Error) -> Self {
-        match e {
-            raw_byte_error::Error::EmptyBuffer => Self::EmptyBuffer,
-            raw_byte_error::Error::EOLNotFound => Self::TargetNotFound("\r\n".as_bytes().to_vec()),
-            raw_byte_error::Error::TargetNotFound(vec) => Self::TargetNotFound(vec),
-        }
     }
 }

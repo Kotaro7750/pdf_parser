@@ -47,8 +47,7 @@ fn first_match_index_3() {
     let buffer = "hogehoge".as_bytes();
     let target = "too long target ".as_bytes();
 
-    if let Err(error::Error::TargetNotFound(_)) = first_match_index(buffer, target) {
-    } else {
+    if let Some(_) = first_match_index(buffer, target) {
         panic!();
     }
 }
@@ -76,8 +75,7 @@ fn last_match_index_3() {
     let buffer = "hogehoge".as_bytes();
     let target = "too long target ".as_bytes();
 
-    if let Err(error::Error::TargetNotFound(_)) = last_match_index(buffer, target) {
-    } else {
+    if let Some(_) = last_match_index(buffer, target) {
         panic!();
     }
 }

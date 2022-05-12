@@ -32,9 +32,15 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
     let n = file.read(&mut buffer)?;
 
     let buffer = &buffer[..n];
-    let buffer = raw_byte::cut_from(buffer, "%%EOF".as_bytes())?;
+    let buffer = match raw_byte::cut_from(buffer, "%%EOF".as_bytes()) {
+        Some(buffer) => buffer,
+        None => return Err(error::Error::EOFNotFound),
+    };
 
-    let startxref_bufer = raw_byte::extract_tail_after(buffer, "startxref".as_bytes())?;
+    let startxref_bufer = match raw_byte::extract_tail_after(buffer, "startxref".as_bytes()) {
+        Some(buffer) => buffer,
+        None => return Err(error::Error::StartXRefNotFound),
+    };
     // バッファの長さの差からバッファ先頭のファイル中バイトオフセットを計算する
     let startxref_bufer_offset = (buffer.len() - startxref_bufer.len()) as u64 + byte_offset;
 
@@ -54,11 +60,18 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
     } as u64;
 
     // トレーラ辞書を取得
-    let trailer_dict_buffer = raw_byte::extract_after(buffer, "trailer".as_bytes())?;
+    let trailer_dict_buffer = match raw_byte::extract_after(buffer, "trailer".as_bytes()) {
+        Some(buffer) => buffer,
+        None => return Err(error::Error::TrailerNotFound),
+    };
     let trailer_dict_buffer_offset =
         (buffer.len() - trailer_dict_buffer.len()) as u64 + byte_offset;
 
-    let trailer_dict_buffer = raw_byte::cut_tail_from(trailer_dict_buffer, "startxref".as_bytes())?;
+    let trailer_dict_buffer =
+        match raw_byte::cut_tail_from(trailer_dict_buffer, "startxref".as_bytes()) {
+            Some(buffer) => buffer,
+            None => return Err(error::Error::StartXRefNotFound),
+        };
 
     let mut parser = match parser::Parser::new(trailer_dict_buffer, trailer_dict_buffer_offset) {
         Ok(p) => p,
