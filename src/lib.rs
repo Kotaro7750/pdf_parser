@@ -24,7 +24,7 @@ impl<'a> PDF<'a> {
     pub fn new(file: &'a mut File) -> Result<PDF<'a>, error::Error> {
         let size = PDF::get_file_size(file)?;
 
-        header::expect_pdf(file)?;
+        header::validate_pdf_header(file)?;
 
         let trailer = trailer::parse_trailer(file, size)?;
         let mut xref = cross_reference::XRef::new(file, &trailer);

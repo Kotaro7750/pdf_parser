@@ -87,6 +87,14 @@ pub fn extract_after_eol(buffer: &[u8]) -> Option<&[u8]> {
     }
 }
 
+pub fn cut_after_eol(buffer: &[u8]) -> Option<&[u8]> {
+    if let Some((eol_i, _)) = first_match_eol(buffer) {
+        Some(&buffer[..eol_i])
+    } else {
+        None
+    }
+}
+
 pub fn extract_from_eol(buffer: &[u8]) -> Option<&[u8]> {
     if let Some((eol_i, _)) = first_match_eol(buffer) {
         Some(&buffer[eol_i..])

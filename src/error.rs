@@ -46,7 +46,7 @@ impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             Error::Io(e) => write!(f, "{}", e),
-            Error::Header(e) => write!(f, "Error on Parsing Header: {}", e),
+            Error::Header(e) => write!(f, "header error: {}", e),
             Error::Trailer(e) => write!(f, "Error on Parsing Trailer: {}", e),
             Error::PageTree(e) => write!(f, "Error on Page Tree: {:?}", e),
             Error::Object(e) => write!(f, "Error on Parsing Object: {:?}", e),
