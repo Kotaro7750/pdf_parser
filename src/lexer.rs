@@ -2,6 +2,7 @@ use std::str;
 use std::str::FromStr;
 
 use crate::raw_byte;
+use error::{Error, ErrorKind};
 
 pub mod error;
 #[cfg(test)]
@@ -29,9 +30,9 @@ pub enum Token {
     StreamObjStart(u64),
 }
 
-fn parse_name(buffer: &[u8]) -> Result<String, error::Error> {
+fn parse_name(buffer: &[u8]) -> Result<String, ()> {
     if !buffer.is_ascii() {
-        Err(error::Error::ParseName(buffer.to_vec()))
+        Err(())
     } else {
         // 全部ASCIIなのでunwrapしても問題ない
         Ok(String::from_utf8(buffer.to_vec()).unwrap())
@@ -39,7 +40,7 @@ fn parse_name(buffer: &[u8]) -> Result<String, error::Error> {
 }
 
 // 並んだバイト列をエスケープシーケンスを解釈したバイト列にして返す
-fn parse_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
+fn parse_string(buffer: &[u8]) -> Result<Vec<u8>, Error> {
     let mut vec: Vec<u8> = vec![];
     let mut i = 0;
 
@@ -117,7 +118,7 @@ fn parse_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
 
 // 並んだバイト列を16進数文字列の1桁とみなし，2桁をまとめて1バイトの16進数として解釈した数列を返す
 // 奇数桁しかない場合には最後に暗黙の0を補う
-fn parse_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
+fn parse_hex_string(buffer: &[u8]) -> Result<Vec<u8>, ()> {
     let mut vec: Vec<u8> = vec![];
     let mut i = 0;
 
@@ -126,7 +127,7 @@ fn parse_hex_string(buffer: &[u8]) -> Result<Vec<u8>, error::Error> {
     while i < buffer.len() {
         let byte = buffer[i];
         if !byte.is_ascii_hexdigit() {
-            return Err(error::Error::ParseHexString(buffer.to_vec()));
+            return Err(());
         }
 
         // byteをASCII文字と見て文字（列）にする
@@ -168,21 +169,21 @@ pub struct Lexer<'a> {
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Result<Lexer, error::Error> {
+    pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Lexer {
         if buffer.len() == 0 {
-            Err(error::Error::EmptyBuffer)
-        } else {
-            Ok(Lexer {
-                buffer,
-                buffer_start_offset,
-                i: 0,
-                token_head_i: 0,
-                byte: buffer[0],
-                char: char::from(buffer[0]),
-                has_indirect_obj_start: false,
-                has_indirect_obj_end: false,
-                token_vec: vec![],
-            })
+            panic!("buffer is empty");
+        }
+
+        Lexer {
+            buffer,
+            buffer_start_offset,
+            i: 0,
+            token_head_i: 0,
+            byte: buffer[0],
+            char: char::from(buffer[0]),
+            has_indirect_obj_start: false,
+            has_indirect_obj_end: false,
+            token_vec: vec![],
         }
     }
 
@@ -247,15 +248,16 @@ impl<'a> Lexer<'a> {
     }
 
     // 現在キーワード末尾を指しているカーソルの次の文字がbuffer終端やデリミタであることを期待
-    fn expect_keyword_end(&mut self) -> Result<(), error::Error> {
+    fn expect_keyword_end(&mut self) -> Result<(), Error> {
         if self.move_next_byte() && self.is_regular_char() {
-            // 現在カーソル先頭はキーワード文字列の次の文字を指しているのでその文字も含めるために+1
-            Err(error::Error::UndefinedKeyword(
-                (&self.buffer[self.token_head_i..(self.i + 1)]).to_vec(),
-            ))
+            Err(self.construct_error(ErrorKind::UndefinedKeyword))
         } else {
             Ok(())
         }
+    }
+
+    fn construct_error(&self, kind: ErrorKind) -> Error {
+        Error::new(kind, self.buffer_start_offset + self.token_head_i as u64)
     }
 
     pub fn has_unbalanced_indirectobj(&self) -> bool {
@@ -264,7 +266,7 @@ impl<'a> Lexer<'a> {
 
     // オブジェクト境界で区切られたbufferが入力されることを想定してbufferを字句解析する
     // 基本的に1つのオブジェクトの字句解析を目的としているのでstreamキーワードやendobjキーワードが来たらその時点で強制的に終了する
-    pub fn tokenize(&mut self) -> Result<(), error::Error> {
+    pub fn tokenize(&mut self) -> Result<(), Error> {
         let mut is_comment = false;
 
         while self.token_head_i < self.buffer.len() {
@@ -345,7 +347,7 @@ impl<'a> Lexer<'a> {
                     continue;
                 }
 
-                return Err(error::Error::ParseNumber(String::from(str)));
+                return Err(self.construct_error(ErrorKind::ParseNumber));
             }
 
             // 名前
@@ -358,10 +360,10 @@ impl<'a> Lexer<'a> {
                     }
                 }
 
-                //  この時点でtoken_head_iは/を指しているので token_head_i + 1
-                self.confirm_token(Token::Name(parse_name(
-                    &self.buffer[(self.token_head_i + 1)..self.i],
-                )?));
+                match parse_name(&self.buffer[(self.token_head_i + 1)..self.i]) {
+                    Ok(name) => self.confirm_token(Token::Name(name)),
+                    Err(_) => return Err(self.construct_error(ErrorKind::ParseName)),
+                }
                 continue;
             }
 
@@ -369,7 +371,7 @@ impl<'a> Lexer<'a> {
             if self.char == '<' {
                 // 16進数文字列/辞書のデリミタのどちらであっても途中でbufferが終わってしまっていることには変わりはない
                 if !self.move_next_byte() {
-                    return Err(error::Error::FinishInObject);
+                    return Err(self.construct_error(ErrorKind::FinishInObject));
                 }
 
                 // 辞書デリミタなら次のトークンへ
@@ -382,18 +384,18 @@ impl<'a> Lexer<'a> {
                 // ここからは16進数文字列のみ
                 while self.char.is_ascii_hexdigit() {
                     if !self.move_next_byte() {
-                        return Err(error::Error::FinishInObject);
+                        return Err(self.construct_error(ErrorKind::FinishInObject));
                     }
                 }
 
                 if self.char != '>' {
-                    return Err(error::Error::UnexpectedByte(self.byte, '>'));
+                    return Err(self.construct_error(ErrorKind::UnexpectedByte));
                 }
 
-                // token_head_iは<を指しているので token_head_i ではなく token_head_i + 1
-                let token = Token::HexStr(parse_hex_string(
-                    &self.buffer[(self.token_head_i + 1)..self.i],
-                )?);
+                let token = match parse_hex_string(&self.buffer[(self.token_head_i + 1)..self.i]) {
+                    Ok(hex_string) => Token::HexStr(hex_string),
+                    Err(_) => return Err(self.construct_error(ErrorKind::ParseHexString)),
+                };
 
                 self.move_next_byte();
                 self.confirm_token(token);
@@ -404,11 +406,11 @@ impl<'a> Lexer<'a> {
             // 16進数文字列は既に処理されている
             if self.char == '>' {
                 if !self.move_next_byte() {
-                    return Err(error::Error::FinishInObject);
+                    return Err(self.construct_error(ErrorKind::FinishInObject));
                 }
 
                 if self.char != '>' {
-                    return Err(error::Error::UnexpectedByte(self.byte, '>'));
+                    return Err(self.construct_error(ErrorKind::FinishInObject));
                 }
 
                 self.move_next_byte();
@@ -420,7 +422,7 @@ impl<'a> Lexer<'a> {
             // 文字列としての解釈は後に回す
             if self.char == '(' {
                 if !self.move_next_byte() {
-                    return Err(error::Error::FinishInObject);
+                    return Err(self.construct_error(ErrorKind::FinishInObject));
                 }
 
                 let mut prev_backslash = false;
@@ -448,7 +450,7 @@ impl<'a> Lexer<'a> {
                     }
 
                     if !self.move_next_byte() {
-                        return Err(error::Error::FinishInObject);
+                        return Err(self.construct_error(ErrorKind::FinishInObject));
                     }
                 }
 
@@ -493,7 +495,7 @@ impl<'a> Lexer<'a> {
                     }
                 }
 
-                return Err(error::Error::InvalidIndirectRef(may_obj_num, may_gen_num));
+                return Err(self.construct_error(ErrorKind::InvalidIndirectRef));
             }
 
             // 間接オブジェクト
@@ -531,7 +533,7 @@ impl<'a> Lexer<'a> {
                 // 現在mというバイトを指している
                 // バイトmの1バイトとその後のEOLが最大2バイトあるのでStream先頭を把握するためには残り3バイト以上あることが必須
                 if (self.buffer.len() - self.i) < 3 {
-                    return Err(error::Error::CannotConfirmStream);
+                    return Err(self.construct_error(ErrorKind::ConfirmStream));
                 }
 
                 self.move_next_byte();
@@ -551,7 +553,7 @@ impl<'a> Lexer<'a> {
 
                     return Ok(());
                 } else {
-                    return Err(error::Error::UnexpectedByte(self.byte, '\n'));
+                    return Err(self.construct_error(ErrorKind::UnexpectedByte));
                 }
             }
 
@@ -579,9 +581,7 @@ impl<'a> Lexer<'a> {
                 continue;
             }
 
-            return Err(error::Error::UndefinedKeyword(
-                (&self.buffer[self.token_head_i..(self.i + 1)]).to_vec(),
-            ));
+            return Err(self.construct_error(ErrorKind::UndefinedKeyword));
         }
 
         Ok(())

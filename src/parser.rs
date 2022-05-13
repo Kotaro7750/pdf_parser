@@ -34,10 +34,7 @@ impl Parser {
             return Err(error::Error::EmptyBuffer);
         };
 
-        let mut lexer = match lexer::Lexer::new(buffer, buffer_start_offset) {
-            Ok(lexer) => lexer,
-            Err(e) => return Err(error::Error::Lexer(e)),
-        };
+        let mut lexer = lexer::Lexer::new(buffer, buffer_start_offset);
 
         if let Err(e) = lexer.tokenize() {
             return Err(error::Error::Lexer(e));
