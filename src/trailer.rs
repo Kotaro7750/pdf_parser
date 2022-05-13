@@ -37,52 +37,7 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
         None => return Err(error::Error::EOFNotFound),
     };
 
-    let startxref_bufer = match raw_byte::extract_tail_after(buffer, "startxref".as_bytes()) {
-        Some(buffer) => buffer,
-        None => return Err(error::Error::StartXRefNotFound),
-    };
-    // バッファの長さの差からバッファ先頭のファイル中バイトオフセットを計算する
-    let startxref_bufer_offset = (buffer.len() - startxref_bufer.len()) as u64 + byte_offset;
-
-    // 相互参照テーブルの開始オフセットを取得
-    let mut parser = match parser::Parser::new(startxref_bufer, startxref_bufer_offset) {
-        Ok(p) => p,
-        Err(e) => return Err(error::Error::ParseXRefOffset(e)),
-    };
-
-    let xref_offset = match parser.parse() {
-        // XXX ファイルサイズを超えるオフセットが指定されたときの対処
-        Ok(parser::Object::Integer(int)) if int > 0 => int,
-        Ok(obj) => {
-            return Err(error::Error::XRefOffsetNotInteger(obj));
-        }
-        Err(e) => return Err(error::Error::ParseXRefOffset(e)),
-    } as u64;
-
-    // トレーラ辞書を取得
-    let trailer_dict_buffer = match raw_byte::extract_after(buffer, "trailer".as_bytes()) {
-        Some(buffer) => buffer,
-        None => return Err(error::Error::TrailerNotFound),
-    };
-    let trailer_dict_buffer_offset =
-        (buffer.len() - trailer_dict_buffer.len()) as u64 + byte_offset;
-
-    let trailer_dict_buffer =
-        match raw_byte::cut_tail_from(trailer_dict_buffer, "startxref".as_bytes()) {
-            Some(buffer) => buffer,
-            None => return Err(error::Error::StartXRefNotFound),
-        };
-
-    let mut parser = match parser::Parser::new(trailer_dict_buffer, trailer_dict_buffer_offset) {
-        Ok(p) => p,
-        Err(e) => return Err(error::Error::ParseTrailerDict(e)),
-    };
-
-    let trailer_dict = match parser.parse() {
-        Ok(obj) => obj,
-        Err(e) => return Err(error::Error::ParseTrailerDict(e)),
-    };
-
+    let trailer_dict = parse_trailer_dict(buffer, byte_offset)?;
     let trailer_dict = object::ensure_dict_with_key(&trailer_dict, vec!["Size", "Root"])?;
 
     let xref_entry_num = match trailer_dict.get("Size").unwrap() {
@@ -95,9 +50,61 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
         _ => return Err(object::Error::ObjectRestriction(String::from("Root")))?,
     };
 
+    let xref_start_offset = parse_xref_offset(buffer, byte_offset)?;
+
     Ok(Trailer {
-        xref_start_offset: xref_offset,
+        xref_start_offset,
         xref_entry_num,
         root_catalog_ref,
     })
+}
+
+fn parse_xref_offset(buffer: &[u8], byte_offset: u64) -> Result<u64, error::Error> {
+    let startxref_bufer = match raw_byte::extract_tail_after(buffer, "startxref".as_bytes()) {
+        Some(buffer) => buffer,
+        None => return Err(error::Error::StartXRefNotFound),
+    };
+    // バッファの長さの差からバッファ先頭のファイル中バイトオフセットを計算する
+    let startxref_byte_offset = (buffer.len() - startxref_bufer.len()) as u64 + byte_offset;
+
+    let mut parser = match parser::Parser::new(startxref_bufer, startxref_byte_offset) {
+        Ok(p) => p,
+        Err(e) => return Err(error::Error::ParseXRefOffset(e)),
+    };
+
+    let xref_byte_offset = match parser.parse() {
+        // XXX ファイルサイズを超えるオフセットが指定されたときの対処
+        Ok(parser::Object::Integer(int)) if int > 0 => int,
+        Ok(obj) => {
+            return Err(error::Error::XRefOffsetNotInteger(obj));
+        }
+        Err(e) => return Err(error::Error::ParseXRefOffset(e)),
+    } as u64;
+
+    Ok(xref_byte_offset)
+}
+
+fn parse_trailer_dict(buffer: &[u8], byte_offset: u64) -> Result<parser::Object, error::Error> {
+    let trailer_dict_buffer = match raw_byte::extract_after(buffer, "trailer".as_bytes()) {
+        Some(buffer) => buffer,
+        None => return Err(error::Error::TrailerNotFound),
+    };
+
+    let trailer_dict_byte_offset = (buffer.len() - trailer_dict_buffer.len()) as u64 + byte_offset;
+
+    let trailer_dict_buffer =
+        match raw_byte::cut_tail_from(trailer_dict_buffer, "startxref".as_bytes()) {
+            Some(buffer) => buffer,
+            None => return Err(error::Error::StartXRefNotFound),
+        };
+
+    let mut parser = match parser::Parser::new(trailer_dict_buffer, trailer_dict_byte_offset) {
+        Ok(p) => p,
+        Err(e) => return Err(error::Error::ParseTrailerDict(e)),
+    };
+
+    match parser.parse() {
+        Ok(obj) => Ok(obj),
+        Err(e) => return Err(error::Error::ParseTrailerDict(e)),
+    }
 }
