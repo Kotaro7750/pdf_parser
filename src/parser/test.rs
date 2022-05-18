@@ -75,15 +75,21 @@ fn parse_array_1() {
 
     assert_eq!(
         obj,
-        Object::Array(PdfArray::new(vec![
-            Object::Integer(PdfInteger::new(123, 3)),
-            Object::Boolean(PdfBoolean::new(true, 8)),
-            Object::Real(PdfReal::new(-12.0, 16)),
-            Object::Array(PdfArray::new(vec![
-                Object::IndirectRef(PdfIndirectRef::new(2, 1)),
-                Object::Null(PdfNull::new())
-            ]))
-        ]))
+        Object::Array(PdfArray::new(
+            vec![
+                Object::Integer(PdfInteger::new(123, 3)),
+                Object::Boolean(PdfBoolean::new(true, 8)),
+                Object::Real(PdfReal::new(-12.0, 16)),
+                Object::Array(PdfArray::new(
+                    vec![
+                        Object::IndirectRef(PdfIndirectRef::new(2, 1)),
+                        Object::Null(PdfNull::new())
+                    ],
+                    20
+                ))
+            ],
+            0
+        ))
     );
 }
 
@@ -103,10 +109,13 @@ fn parse_dict_1() {
     let mut inner_hm = HashMap::new();
     inner_hm.insert(
         String::from("arr"),
-        Object::Array(PdfArray::new(vec![
-            Object::Integer(PdfInteger::new(123, 28)),
-            Object::Name(PdfName::new(String::from("name"), 32)),
-        ])),
+        Object::Array(PdfArray::new(
+            vec![
+                Object::Integer(PdfInteger::new(123, 28)),
+                Object::Name(PdfName::new(String::from("name"), 32)),
+            ],
+            27,
+        )),
     );
 
     hm.insert(String::from("fuga"), Object::Dict(PdfDict::new(inner_hm)));

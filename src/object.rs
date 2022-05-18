@@ -151,10 +151,16 @@ impl PdfString {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PdfArray(Vec<Object>);
+pub struct PdfArray {
+    payload: Vec<Object>,
+    byte_offset: u64,
+}
 impl PdfArray {
-    pub fn new(vec: Vec<Object>) -> Self {
-        Self(vec)
+    pub fn new(arr: Vec<Object>, byte_offset: u64) -> Self {
+        Self {
+            payload: arr,
+            byte_offset,
+        }
     }
 
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
@@ -170,7 +176,7 @@ impl<'a> std::iter::IntoIterator for &'a PdfArray {
     type IntoIter = slice::Iter<'a, Object>;
 
     fn into_iter(self) -> slice::Iter<'a, Object> {
-        self.0.iter()
+        self.payload.iter()
     }
 }
 

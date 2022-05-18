@@ -91,23 +91,25 @@ impl Parser {
             None => return Err(Error::new(ErrorKind::NoToken, self.byte_offset)),
         };
 
+        let token_byte_offset = token.byte_offset;
+
         if let TokenContent::Boolean(boolean) = token.content() {
             return Ok(Object::Boolean(PdfBoolean::new(
                 *boolean,
-                token.byte_offset,
+                token_byte_offset,
             )));
         };
 
         if let TokenContent::Integer(int) = token.content() {
-            return Ok(Object::Integer(PdfInteger::new(*int, token.byte_offset)));
+            return Ok(Object::Integer(PdfInteger::new(*int, token_byte_offset)));
         }
 
         if let TokenContent::Real(real) = token.content() {
-            return Ok(Object::Real(PdfReal::new(*real, token.byte_offset)));
+            return Ok(Object::Real(PdfReal::new(*real, token_byte_offset)));
         }
 
         if let TokenContent::Name(str) = token.content() {
-            return Ok(Object::Name(PdfName::new(str.clone(), token.byte_offset)));
+            return Ok(Object::Name(PdfName::new(str.clone(), token_byte_offset)));
         }
 
         if let TokenContent::Null = token.content() {
@@ -117,14 +119,14 @@ impl Parser {
         if let TokenContent::HexStr(vec) = token.content() {
             return Ok(Object::String(PdfString::new(
                 vec.clone(),
-                token.byte_offset,
+                token_byte_offset,
             )));
         }
 
         if let TokenContent::String(vec) = token.content() {
             return Ok(Object::String(PdfString::new(
                 vec.clone(),
-                token.byte_offset,
+                token_byte_offset,
             )));
         }
 
@@ -133,7 +135,10 @@ impl Parser {
         }
 
         if let TokenContent::ArrayStart = token.content() {
-            return Ok(Object::Array(PdfArray::new(self.parse_array_content()?)));
+            return Ok(Object::Array(PdfArray::new(
+                self.parse_array_content()?,
+                token_byte_offset,
+            )));
         }
 
         if let TokenContent::DictStart = token.content() {
@@ -161,7 +166,7 @@ impl Parser {
 
         Err(Error::new(
             ErrorKind::UnexpectedToken(token.clone()),
-            token.byte_offset,
+            token_byte_offset,
         ))
     }
 
