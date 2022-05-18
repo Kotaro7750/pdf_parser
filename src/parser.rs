@@ -92,7 +92,10 @@ impl Parser {
         };
 
         if let TokenContent::Boolean(boolean) = token.content() {
-            return Ok(Object::Boolean(PdfBoolean::new(*boolean)));
+            return Ok(Object::Boolean(PdfBoolean::new(
+                *boolean,
+                token.byte_offset,
+            )));
         };
 
         if let TokenContent::Integer(int) = token.content() {

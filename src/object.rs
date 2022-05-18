@@ -32,17 +32,24 @@ impl From<std::io::Error> for Error {
     }
 }
 
-trait PdfObject: std::fmt::Debug + std::clone::Clone {}
-
 // TODO マクロ展開をするマクロとかあるといいね
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct PdfBoolean(bool);
+pub struct PdfBoolean {
+    payload: bool,
+    byte_offset: u64,
+}
 impl PdfBoolean {
-    pub fn new(b: bool) -> Self {
-        Self(b)
+    pub fn new(b: bool, byte_offset: u64) -> Self {
+        Self {
+            payload: b,
+            byte_offset,
+        }
+    }
+
+    pub fn unpack(&self) -> bool {
+        self.payload
     }
 }
-impl PdfObject for PdfBoolean {}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct PdfInteger {
@@ -68,7 +75,6 @@ impl PdfInteger {
         self.payload
     }
 }
-impl PdfObject for PdfInteger {}
 
 impl std::convert::TryFrom<PdfInteger> for u64 {
     type Error = ();
