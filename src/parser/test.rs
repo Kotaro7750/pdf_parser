@@ -62,7 +62,7 @@ fn parse_string_1() {
 
     assert_eq!(
         obj,
-        Object::String(PdfString::new(vec![104, 111, 103, 101]))
+        Object::String(PdfString::new(vec![104, 111, 103, 101], 0))
     );
 }
 

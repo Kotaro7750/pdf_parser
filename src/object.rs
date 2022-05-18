@@ -137,10 +137,16 @@ impl PartialEq<str> for PdfName {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PdfString(Vec<u8>);
+pub struct PdfString {
+    payload: Vec<u8>,
+    byte_offset: u64,
+}
 impl PdfString {
-    pub fn new(vec: Vec<u8>) -> Self {
-        Self(vec)
+    pub fn new(s: Vec<u8>, byte_offset: u64) -> Self {
+        Self {
+            payload: s,
+            byte_offset,
+        }
     }
 }
 

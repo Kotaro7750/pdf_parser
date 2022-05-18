@@ -115,11 +115,17 @@ impl Parser {
         }
 
         if let TokenContent::HexStr(vec) = token.content() {
-            return Ok(Object::String(PdfString::new((*vec).clone())));
+            return Ok(Object::String(PdfString::new(
+                vec.clone(),
+                token.byte_offset,
+            )));
         }
 
         if let TokenContent::String(vec) = token.content() {
-            return Ok(Object::String(PdfString::new((*vec).clone())));
+            return Ok(Object::String(PdfString::new(
+                vec.clone(),
+                token.byte_offset,
+            )));
         }
 
         if let TokenContent::IndirectRef(obj_num, gen_num) = token.content() {
