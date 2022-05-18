@@ -9,7 +9,36 @@ pub mod error;
 mod test;
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum Token {
+pub struct Token {
+    pub byte_offset: u64,
+    pub token_content: TokenContent,
+}
+
+impl Token {
+    pub fn new(token_content: TokenContent, byte_offset: u64) -> Token {
+        Token {
+            token_content,
+            byte_offset,
+        }
+    }
+
+    pub fn content(&self) -> &TokenContent {
+        &self.token_content
+    }
+}
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "token `{}` at byte `{}`",
+            self.token_content, self.byte_offset
+        )
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum TokenContent {
     EOL,
     Boolean(bool),
     Integer(isize),
@@ -22,12 +51,39 @@ pub enum Token {
     ArrayStart,
     ArrayEnd,
     Null,
-    IndirectRef(u64, u64),
-    IndirectObjStart(u64, u64),
+    IndirectRef(usize, usize),
+    IndirectObjStart(usize, usize),
     IndirectObjEnd,
     // streamキーワードが表れたらそこで字句解析を終了するのでEndはない
     // Streamバイト列が始まるバイトオフセット
     StreamObjStart(u64),
+}
+
+impl std::fmt::Display for TokenContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            TokenContent::EOL => write!(f, "(EOL)"),
+            TokenContent::Boolean(boolean) => write!(f, "(boolean `{}`)", boolean),
+            TokenContent::Integer(int) => write!(f, "(integer `{}`)", int),
+            TokenContent::Real(real) => write!(f, "(real `{}`)", real),
+            TokenContent::HexStr(_) => write!(f, "(hex string)"),
+            TokenContent::String(_) => write!(f, "(string)"),
+            TokenContent::Name(name) => write!(f, "(name `{}`)", name),
+            TokenContent::DictStart => write!(f, "(dictionary start)"),
+            TokenContent::DictEnd => write!(f, "(dictionary end)"),
+            TokenContent::ArrayStart => write!(f, "(array start)"),
+            TokenContent::ArrayEnd => write!(f, "(array end)"),
+            TokenContent::Null => write!(f, "(null)"),
+            TokenContent::IndirectRef(obj_num, gen_num) => {
+                write!(f, "(indirect ref `({}, {})`)", obj_num, gen_num)
+            }
+            TokenContent::IndirectObjStart(obj_num, gen_num) => {
+                write!(f, "(indirect object `({}, {})`)", obj_num, gen_num)
+            }
+            TokenContent::IndirectObjEnd => write!(f, "(indirect object end)"),
+            TokenContent::StreamObjStart(_) => write!(f, "(stream object start)"),
+        }
+    }
 }
 
 fn parse_name(buffer: &[u8]) -> Result<String, ()> {
@@ -201,9 +257,28 @@ impl<'a> Lexer<'a> {
     }
 
     // tokenをトークン列に加えトークン先頭カーソルを移動させる
-    fn confirm_token(&mut self, token: Token) {
-        self.token_vec.push(token);
+    fn confirm_token(&mut self, token_content: TokenContent) {
+        self.token_vec.push(Token::new(
+            token_content,
+            self.buffer_start_offset + self.token_head_i as u64,
+        ));
+
         self.token_head_i = self.i;
+    }
+
+    fn cancel_token(&mut self) -> Option<Token> {
+        let may_token = self.token_vec.pop();
+        let may_last_token = self.token_vec.last();
+
+        match may_last_token {
+            Some(token) => {
+                // 元々usizeだったのでキャストしても大丈夫なはず
+                self.token_head_i = (token.byte_offset - self.buffer_start_offset) as usize
+            }
+            None => self.token_head_i = 0,
+        }
+
+        may_token
     }
 
     // 現在のトークンを無視してトークン先頭カーソルを移動させる
@@ -338,12 +413,12 @@ impl<'a> Lexer<'a> {
                 let str = str::from_utf8(&self.buffer[self.token_head_i..self.i]).unwrap();
 
                 if let Ok(int) = isize::from_str_radix(str, 10) {
-                    self.confirm_token(Token::Integer(int));
+                    self.confirm_token(TokenContent::Integer(int));
                     continue;
                 }
 
                 if let Ok(real) = f64::from_str(str) {
-                    self.confirm_token(Token::Real(real));
+                    self.confirm_token(TokenContent::Real(real));
                     continue;
                 }
 
@@ -361,7 +436,7 @@ impl<'a> Lexer<'a> {
                 }
 
                 match parse_name(&self.buffer[(self.token_head_i + 1)..self.i]) {
-                    Ok(name) => self.confirm_token(Token::Name(name)),
+                    Ok(name) => self.confirm_token(TokenContent::Name(name)),
                     Err(_) => return Err(self.construct_error(ErrorKind::ParseName)),
                 }
                 continue;
@@ -377,7 +452,7 @@ impl<'a> Lexer<'a> {
                 // 辞書デリミタなら次のトークンへ
                 if self.char == '<' {
                     self.move_next_byte();
-                    self.confirm_token(Token::DictStart);
+                    self.confirm_token(TokenContent::DictStart);
                     continue;
                 }
 
@@ -393,7 +468,7 @@ impl<'a> Lexer<'a> {
                 }
 
                 let token = match parse_hex_string(&self.buffer[(self.token_head_i + 1)..self.i]) {
-                    Ok(hex_string) => Token::HexStr(hex_string),
+                    Ok(hex_string) => TokenContent::HexStr(hex_string),
                     Err(_) => return Err(self.construct_error(ErrorKind::ParseHexString)),
                 };
 
@@ -414,7 +489,7 @@ impl<'a> Lexer<'a> {
                 }
 
                 self.move_next_byte();
-                self.confirm_token(Token::DictEnd);
+                self.confirm_token(TokenContent::DictEnd);
                 continue;
             }
 
@@ -455,8 +530,9 @@ impl<'a> Lexer<'a> {
                 }
 
                 // token_head_iは(を，iは)を指しているので token_head_i ではなく token_head_i + 1
-                let token =
-                    Token::String(parse_string(&self.buffer[(self.token_head_i + 1)..self.i])?);
+                let token = TokenContent::String(parse_string(
+                    &self.buffer[(self.token_head_i + 1)..self.i],
+                )?);
 
                 self.move_next_byte();
                 self.confirm_token(token);
@@ -466,30 +542,39 @@ impl<'a> Lexer<'a> {
             // 配列
             if self.char == '[' {
                 self.move_next_byte();
-                self.confirm_token(Token::ArrayStart);
+                self.confirm_token(TokenContent::ArrayStart);
                 continue;
             }
 
             // 配列の終わりは最終要素の直後に来る可能性がある
             if self.char == ']' {
                 self.move_next_byte();
-                self.confirm_token(Token::ArrayEnd);
+                self.confirm_token(TokenContent::ArrayEnd);
                 continue;
             }
 
             // 間接参照
             if self.char == 'R' {
-                let may_gen_num = self.token_vec.pop();
-                let may_obj_num = self.token_vec.pop();
+                let may_gen_num = self.cancel_token();
+                let may_obj_num = self.cancel_token();
 
-                if let (Some(Token::Integer(object_num)), Some(Token::Integer(generation_num))) =
-                    (&may_obj_num, &may_gen_num)
+                if let (
+                    Some(Token {
+                        token_content: TokenContent::Integer(object_num),
+                        byte_offset: _,
+                    }),
+                    Some(Token {
+                        token_content: TokenContent::Integer(generation_num),
+                        byte_offset: _,
+                    }),
+                ) = (&may_obj_num, &may_gen_num)
                 {
                     if *object_num > 0 && *generation_num >= 0 {
                         self.move_next_byte();
-                        self.confirm_token(Token::IndirectRef(
-                            *object_num as u64,
-                            *generation_num as u64,
+                        // 正であることは保証してあるのでキャストしても大丈夫
+                        self.confirm_token(TokenContent::IndirectRef(
+                            *object_num as usize,
+                            *generation_num as usize,
                         ));
                         continue;
                     }
@@ -500,17 +585,25 @@ impl<'a> Lexer<'a> {
 
             // 間接オブジェクト
             if self.assume_and_move("obj".as_bytes()) {
-                let may_gen_num = self.token_vec.pop();
-                let may_obj_num = self.token_vec.pop();
+                let may_gen_num = self.cancel_token();
+                let may_obj_num = self.cancel_token();
 
-                if let (Some(Token::Integer(object_num)), Some(Token::Integer(generation_num))) =
-                    (&may_obj_num, &may_gen_num)
+                if let (
+                    Some(Token {
+                        token_content: TokenContent::Integer(object_num),
+                        byte_offset: _,
+                    }),
+                    Some(Token {
+                        token_content: TokenContent::Integer(generation_num),
+                        byte_offset: _,
+                    }),
+                ) = (&may_obj_num, &may_gen_num)
                 {
                     if *object_num > 0 && *generation_num >= 0 {
                         self.move_next_byte();
-                        self.confirm_token(Token::IndirectObjStart(
-                            *object_num as u64,
-                            *generation_num as u64,
+                        self.confirm_token(TokenContent::IndirectObjStart(
+                            *object_num as usize,
+                            *generation_num as usize,
                         ));
                         self.has_indirect_obj_start = true;
                         continue;
@@ -522,7 +615,7 @@ impl<'a> Lexer<'a> {
             if self.assume_and_move("endobj".as_bytes()) {
                 self.expect_keyword_end()?;
 
-                self.confirm_token(Token::IndirectObjEnd);
+                self.confirm_token(TokenContent::IndirectObjEnd);
                 self.has_indirect_obj_end = true;
                 return Ok(());
             }
@@ -543,11 +636,11 @@ impl<'a> Lexer<'a> {
                 if self.assume_and_move("\n".as_bytes()) || self.assume_and_move("\r\n".as_bytes())
                 {
                     // パースしやすいように直前で間接オブジェクト自体は終了していることにする
-                    self.confirm_token(Token::IndirectObjEnd);
+                    self.confirm_token(TokenContent::IndirectObjEnd);
                     self.has_indirect_obj_end = true;
 
                     // 現在iはEOLを指しておりストリーム先頭はその次なので+1
-                    self.confirm_token(Token::StreamObjStart(
+                    self.confirm_token(TokenContent::StreamObjStart(
                         self.buffer_start_offset + self.i as u64 + 1,
                     ));
 
@@ -561,7 +654,7 @@ impl<'a> Lexer<'a> {
             if self.assume_and_move("null".as_bytes()) {
                 self.expect_keyword_end()?;
 
-                self.confirm_token(Token::Null);
+                self.confirm_token(TokenContent::Null);
                 continue;
             }
 
@@ -569,7 +662,7 @@ impl<'a> Lexer<'a> {
             if self.assume_and_move("true".as_bytes()) {
                 self.expect_keyword_end()?;
 
-                self.confirm_token(Token::Boolean(true));
+                self.confirm_token(TokenContent::Boolean(true));
                 continue;
             }
 
@@ -577,7 +670,7 @@ impl<'a> Lexer<'a> {
             if self.assume_and_move("false".as_bytes()) {
                 self.expect_keyword_end()?;
 
-                self.confirm_token(Token::Boolean(false));
+                self.confirm_token(TokenContent::Boolean(false));
                 continue;
             }
 

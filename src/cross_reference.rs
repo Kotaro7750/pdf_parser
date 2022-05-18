@@ -69,13 +69,13 @@ impl XRef {
         )
     }
 
-    pub fn get_object_byte_offset(&self, file: &mut File, obj_num: u64, gen_num: u64) -> u64 {
-        if obj_num < self.from || (self.from + self.entry_num) <= obj_num {
+    pub fn get_object_byte_offset(&self, file: &mut File, obj_num: usize, gen_num: usize) -> u64 {
+        if (obj_num as u64) < self.from || (self.from + self.entry_num) <= obj_num as u64 {
             panic!("object is not in cross reference");
         }
 
         // 1エントリはきっかり20バイトである
-        let byte_offset = self.actual_start_offset + ((obj_num - self.from) * 20) as u64;
+        let byte_offset = self.actual_start_offset + ((obj_num as u64 - self.from) * 20) as u64;
 
         let mut buffer: [u8; 18] = [0; 18];
 
@@ -87,7 +87,7 @@ impl XRef {
 
         let (offset, gen, is_n) = Self::parse_entry(buffer);
 
-        if gen != gen_num {
+        if gen != gen_num as u64 {
             panic!("generation number mismatch");
         }
 

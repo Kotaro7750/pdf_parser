@@ -2,38 +2,44 @@ use std::fmt;
 
 use crate::lexer::error as lexer_error;
 use crate::lexer::Token;
-use crate::parser::Object;
 
-pub enum Error {
-    EmptyBuffer,
-    NoToken,
-    IndirectObjMissMatch,
-    NotIndirectObj(Object),
-    UnexpectedToken(Token),
-    Lexer(lexer_error::Error),
+#[derive(Debug)]
+pub struct Error {
+    pub kind: ErrorKind,
+    byte_offset: u64,
 }
 
 impl Error {
-    fn common_fmt(self: &Error, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        match self {
-            Error::EmptyBuffer => write!(f, "Buffer is Empty"),
-            Error::NoToken => write!(f, "Token is missing"),
-            Error::NotIndirectObj(obj) => write!(f, "{:?} is not indirect obj", obj),
-            Error::IndirectObjMissMatch => write!(f, "keyword obj and endobj is not matched"),
-            Error::UnexpectedToken(token) => write!(f, "UnexpectedToken is found: {:?}", token),
-            Error::Lexer(e) => write!(f, "Error in Lexer: {}", e),
-        }
+    pub fn new(kind: ErrorKind, byte_offset: u64) -> Error {
+        Error { kind, byte_offset }
     }
 }
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.common_fmt(f)
+        write!(f, "{} at byte offset `{}`", self.kind, self.byte_offset)
     }
 }
 
-impl fmt::Debug for Error {
+impl std::error::Error for Error {}
+
+#[derive(Debug)]
+pub enum ErrorKind {
+    NoToken,
+    IndirectObjMissMatch,
+    UnexpectedToken(Token),
+    InvalidStreamObj,
+    Lexer(lexer_error::Error),
+}
+
+impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.common_fmt(f)
+        match self {
+            ErrorKind::NoToken => write!(f, "token is missing"),
+            ErrorKind::IndirectObjMissMatch => write!(f, "keyword obj and endobj is not matched"),
+            ErrorKind::UnexpectedToken(token) => write!(f, "unexpected token found `{}`", token),
+            ErrorKind::InvalidStreamObj => write!(f, "invalid stream object"),
+            ErrorKind::Lexer(e) => write!(f, "cannot tokenize: {}", e),
+        }
     }
 }

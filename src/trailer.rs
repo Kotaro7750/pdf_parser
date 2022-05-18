@@ -11,13 +11,13 @@ pub mod error;
 
 pub struct Trailer {
     pub xref_start_offset: u64,
-    xref_entry_num: u64,
-    root_catalog_ref: (u64, u64),
+    xref_entry_num: object::PdfInteger,
+    root_catalog_ref: object::PdfIndirectRef,
 }
 
 impl Trailer {
-    pub fn get_root_catalog_ref(&self) -> (u64, u64) {
-        (self.root_catalog_ref.0, self.root_catalog_ref.1)
+    pub fn get_root_catalog_ref(&self) -> object::PdfIndirectRef {
+        self.root_catalog_ref.clone()
     }
 }
 
@@ -37,18 +37,12 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
         None => return Err(error::Error::EOFNotFound),
     };
 
-    let trailer_dict = parse_trailer_dict(buffer, byte_offset)?;
-    let trailer_dict = object::ensure_dict_with_key(&trailer_dict, vec!["Size", "Root"])?;
+    let may_trailer_dict = parse_trailer_dict(buffer, byte_offset)?;
+    let trailer_dict = object::PdfDict::ensure_with_key(&may_trailer_dict, vec!["Size", "Root"])?;
 
-    let xref_entry_num = match trailer_dict.get("Size").unwrap() {
-        parser::Object::Integer(int) if *int > 0 => *int,
-        _ => return Err(object::Error::ObjectRestriction(String::from("Size")))?,
-    } as u64;
-
-    let root_catalog_ref = match trailer_dict.get("Root").unwrap() {
-        parser::Object::IndirectRef(obj_num, gen_num) => (*obj_num, *gen_num),
-        _ => return Err(object::Error::ObjectRestriction(String::from("Root")))?,
-    };
+    let xref_entry_num = object::PdfInteger::ensure(trailer_dict.get("Size").unwrap())?.clone();
+    let root_catalog_ref =
+        object::PdfIndirectRef::ensure(trailer_dict.get("Root").unwrap())?.clone();
 
     let xref_start_offset = parse_xref_offset(buffer, byte_offset)?;
 
@@ -74,14 +68,15 @@ fn parse_xref_offset(buffer: &[u8], byte_offset: u64) -> Result<u64, error::Erro
 
     let xref_byte_offset = match parser.parse() {
         // XXX ファイルサイズを超えるオフセットが指定されたときの対処
-        Ok(parser::Object::Integer(int)) if int > 0 => int,
-        Ok(obj) => {
-            return Err(error::Error::XRefOffsetNotInteger(obj));
-        }
+        Ok(obj) => object::PdfInteger::ensure(&obj)?.clone(),
         Err(e) => return Err(error::Error::ParseXRefOffset(e)),
-    } as u64;
+    };
 
-    Ok(xref_byte_offset)
+    if xref_byte_offset <= object::PdfInteger::new(0) {
+        panic!()
+    }
+
+    Ok(u64::try_from(xref_byte_offset).unwrap())
 }
 
 fn parse_trailer_dict(buffer: &[u8], byte_offset: u64) -> Result<parser::Object, error::Error> {

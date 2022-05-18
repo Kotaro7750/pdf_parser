@@ -26,7 +26,7 @@ fn main() {
         process::exit(1)
     });
 
-    for (page_number, images) in pdf.extract_image(&vec![30, 31]).unwrap().iter().enumerate() {
+    for (page_number, images) in pdf.extract_image(&vec![1, 2]).unwrap().iter().enumerate() {
         for (image_number, image) in images.iter().enumerate() {
             image.save(format!("{}-{}.png", page_number, image_number));
         }

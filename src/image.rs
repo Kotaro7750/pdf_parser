@@ -1,6 +1,5 @@
 use flate2::read::ZlibDecoder;
 use image::{DynamicImage, ImageBuffer, RgbImage};
-use std::collections::HashMap;
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
@@ -44,25 +43,25 @@ pub struct ImageDecodeParam {
 
 impl ImageDecodeParam {
     pub fn new(
-        dict_obj: &Object,
+        image_dict: &object::PdfDict,
         file: &mut File,
         xref: &cross_reference::XRef,
     ) -> Result<ImageDecodeParam, Error> {
-        let image_dict = object::ensure_dict_with_key(dict_obj, vec!["Subtype"])?;
+        image_dict.assert_with_key(vec!["Subtype"])?;
 
-        let subtype = object::ensure_name(image_dict.get(&"Subtype".to_string()).unwrap())?;
+        let subtype = object::PdfName::ensure(image_dict.get("Subtype").unwrap())?;
 
         if subtype != "Image" {
             panic!("subtype is not image");
         }
 
-        let image_dict = object::ensure_dict_with_key(dict_obj, vec!["Width", "Height"])?;
+        image_dict.assert_with_key(vec!["Width", "Height"])?;
 
-        let width = object::ensure_integer(&image_dict.get(&"Width".to_string()).unwrap())?;
-        let height = object::ensure_integer(&image_dict.get(&"Height".to_string()).unwrap())?;
+        let width = object::PdfInteger::ensure(&image_dict.get("Width").unwrap())?;
+        let height = object::PdfInteger::ensure(&image_dict.get("Height").unwrap())?;
 
-        let width = width as u32;
-        let height = height as u32;
+        let width = *width.as_ref() as u32;
+        let height = *height.as_ref() as u32;
 
         let colorspace = get_colorspace(image_dict, file, xref)?;
 
@@ -98,18 +97,16 @@ pub fn decode_image(image: &ImageDecodeParam, byte_vec: &Vec<u8>) -> Result<RgbI
 }
 
 fn get_colorspace(
-    image_dict: &HashMap<String, Object>,
+    image_dict: &object::PdfDict,
     file: &mut File,
     xref: &cross_reference::XRef,
 ) -> Result<ColorSpace, Error> {
-    let colorspace = match image_dict.get(&"ColorSpace".to_string()).unwrap() {
+    let colorspace = match image_dict.get("ColorSpace").unwrap() {
         Object::Name(name) => name.clone(),
-        Object::IndirectRef(obj_num, gen_num) => {
-            match object::ensure_indirect_obj(&object::get_indirect_obj(
-                file,
-                xref,
-                (*obj_num, *gen_num),
-            )?)? {
+        Object::IndirectRef(indirect_ref) => {
+            let hoge = indirect_ref.get_indirect_obj(file, xref)?;
+
+            match object::PdfIndirectObj::ensure(&hoge)?.get_object() {
                 Object::Name(name) => name.clone(),
                 _ => {
                     return Err(Error::UnsupporttedColorSpace);

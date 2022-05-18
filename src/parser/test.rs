@@ -1,5 +1,7 @@
-use super::*;
 use std::collections::HashMap;
+
+use super::*;
+use crate::object::*;
 
 #[test]
 fn parse_integer() {
@@ -8,7 +10,7 @@ fn parse_integer() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::Integer(123));
+    assert_eq!(obj, Object::Integer(PdfInteger::new(123)));
 }
 
 #[test]
@@ -18,7 +20,7 @@ fn parse_real() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::Real(-123.0));
+    assert_eq!(obj, Object::Real(PdfReal::new(-123.0)));
 }
 
 #[test]
@@ -28,7 +30,7 @@ fn parse_boolean() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::Boolean(true));
+    assert_eq!(obj, Object::Boolean(PdfBoolean::new(true)));
 }
 
 #[test]
@@ -38,7 +40,7 @@ fn parse_null() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::Null);
+    assert_eq!(obj, Object::Null(PdfNull::new()));
 }
 
 #[test]
@@ -48,7 +50,7 @@ fn parse_indirect_ref() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::IndirectRef(1, 0));
+    assert_eq!(obj, Object::IndirectRef(PdfIndirectRef::new(1, 0)));
 }
 
 #[test]
@@ -58,7 +60,10 @@ fn parse_string_1() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::String(vec![104, 111, 103, 101]));
+    assert_eq!(
+        obj,
+        Object::String(PdfString::new(vec![104, 111, 103, 101]))
+    );
 }
 
 #[test]
@@ -70,12 +75,15 @@ fn parse_array_1() {
 
     assert_eq!(
         obj,
-        Object::Array(vec![
-            Object::Integer(123),
-            Object::Boolean(true),
-            Object::Real(-12.0),
-            Object::Array(vec![Object::IndirectRef(2, 1), Object::Null])
-        ])
+        Object::Array(PdfArray::new(vec![
+            Object::Integer(PdfInteger::new(123)),
+            Object::Boolean(PdfBoolean::new(true)),
+            Object::Real(PdfReal::new(-12.0)),
+            Object::Array(PdfArray::new(vec![
+                Object::IndirectRef(PdfIndirectRef::new(2, 1)),
+                Object::Null(PdfNull::new())
+            ]))
+        ]))
     );
 }
 
@@ -87,17 +95,21 @@ fn parse_dict_1() {
     let obj = parser.parse_object().unwrap();
 
     let mut hm = HashMap::new();
-    hm.insert(String::from("hoge"), Object::IndirectRef(1, 0));
+    hm.insert(
+        String::from("hoge"),
+        Object::IndirectRef(PdfIndirectRef::new(1, 0)),
+    );
+
     let mut inner_hm = HashMap::new();
     inner_hm.insert(
         String::from("arr"),
-        Object::Array(vec![
-            Object::Integer(123),
-            Object::Name(String::from("name")),
-        ]),
+        Object::Array(PdfArray::new(vec![
+            Object::Integer(PdfInteger::new(123)),
+            Object::Name(PdfName::new(String::from("name"))),
+        ])),
     );
 
-    hm.insert(String::from("fuga"), Object::Dict(inner_hm));
+    hm.insert(String::from("fuga"), Object::Dict(PdfDict::new(inner_hm)));
 
-    assert_eq!(obj, Object::Dict(hm));
+    assert_eq!(obj, Object::Dict(PdfDict::new(hm)));
 }

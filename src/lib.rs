@@ -31,14 +31,14 @@ impl<'a> PDF<'a> {
 
         // ドキュメントカタログ
         let root_ref = trailer.get_root_catalog_ref();
-        let root_obj = object::get_indirect_obj(file, &mut xref, root_ref)?;
-        let root_obj = object::ensure_indirect_obj(&root_obj)?;
+        let root_obj = root_ref.get_indirect_obj(file, &mut xref)?;
+        let root_obj = object::PdfIndirectObj::ensure(&root_obj)?.get_object();
 
-        let root_hm = object::ensure_dict_with_key(root_obj, vec!["Type", "Pages"])?;
+        let root_dict = object::PdfDict::ensure_with_key(root_obj, vec!["Type", "Pages"])?;
 
-        object::ensure_dict_type(root_hm, "Catalog")?;
+        root_dict.ensure_type("Catalog")?;
 
-        let pages_ref = object::ensure_indirect_ref(root_hm.get(&String::from("Pages")).unwrap())?;
+        let pages_ref = object::PdfIndirectRef::ensure(root_dict.get("Pages").unwrap())?;
 
         let pages = page::parse_page_list(file, &mut xref, pages_ref)?;
 

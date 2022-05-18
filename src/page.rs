@@ -17,31 +17,31 @@ impl From<object::Error> for Error {
 }
 
 pub struct Page {
-    pub thumbnail: Option<(u64, u64)>,
-    external_objects: Vec<(u64, u64)>,
+    pub thumbnail: Option<object::PdfIndirectRef>,
+    external_objects: Vec<object::PdfIndirectRef>,
 }
 
 pub fn parse_page_list(
     file: &mut File,
     xref: &XRef,
-    root_page_ref: (u64, u64),
+    root_page_ref: &object::PdfIndirectRef,
 ) -> Result<Vec<Page>, Error> {
-    let root_node_obj = object::get_indirect_obj(file, xref, root_page_ref)?;
+    let root_node_obj = root_page_ref.get_indirect_obj(file, xref)?;
+    let root_node_obj = object::PdfIndirectObj::ensure(&root_node_obj)?;
+    let root_node_obj = root_node_obj.get_object();
 
-    let root_node_obj = object::ensure_indirect_obj(&root_node_obj)?;
+    let root_node_dict =
+        object::PdfDict::ensure_with_key(&root_node_obj, vec!["Type", "Kids", "Count"])?;
 
-    let root_node_map =
-        object::ensure_dict_with_key(&root_node_obj, vec!["Type", "Kids", "Count"])?;
-
-    object::ensure_dict_type(root_node_map, "Pages")?;
+    root_node_dict.ensure_type("Pages")?;
 
     let mut page_list = Vec::<Page>::new();
 
-    let kids = root_node_map.get(&"Kids".to_string()).unwrap();
-    let kids = object::ensure_array(kids)?;
+    let kids = root_node_dict.get("Kids").unwrap();
+    let kids = object::PdfArray::ensure(kids)?;
 
     for kid in kids {
-        let kid_ref = object::ensure_indirect_ref(kid)?;
+        let kid_ref = object::PdfIndirectRef::ensure(&kid)?;
         parse_page_tree_node(file, xref, kid_ref, &mut page_list)?;
     }
 
@@ -51,34 +51,35 @@ pub fn parse_page_list(
 fn parse_page_tree_node(
     file: &mut File,
     xref: &XRef,
-    node_ref: (u64, u64),
+    node_ref: &object::PdfIndirectRef,
     page_list: &mut Vec<Page>,
 ) -> Result<(), Error> {
-    let node_obj = object::get_indirect_obj(file, xref, node_ref)?;
-    let node_obj = object::ensure_indirect_obj(&node_obj)?;
+    let node_obj = node_ref.get_indirect_obj(file, xref)?;
+    let node_obj = object::PdfIndirectObj::ensure(&node_obj)?.get_object();
 
     // ページリストのノードには中間ノードかページノードがある
-    let node_map = object::ensure_dict_with_key(&node_obj, vec!["Type"])?;
+    let node_dict = object::PdfDict::ensure_with_key(&node_obj, vec!["Type"])?;
 
-    if let Ok(_) = object::ensure_dict_type(node_map, "Page") {
-        let mut xobj_vec = Vec::<(u64, u64)>::new();
-        if let Some(resource_obj) = node_map.get(&"Resources".to_string()) {
-            let resource_obj = object::ensure_dict_with_key(resource_obj, vec![])?;
+    if let Ok(_) = node_dict.ensure_type("Page") {
+        let mut xobj_vec = Vec::<object::PdfIndirectRef>::new();
 
-            if let Some(xobj) = resource_obj.get(&"XObject".to_string()) {
-                let xobj = object::ensure_dict_with_key(xobj, vec![])?;
+        if let Some(resource_obj) = node_dict.get("Resources") {
+            let resource_dict = object::PdfDict::ensure_with_key(resource_obj, vec![])?;
+
+            if let Some(xobj) = resource_dict.get("XObject") {
+                let xobj = object::PdfDict::ensure_with_key(xobj, vec![])?;
                 for indirect_ref in xobj
                     .iter()
-                    .filter(|kv| object::ensure_indirect_ref(kv.1).is_ok())
-                    .map(|kv| object::ensure_indirect_ref(kv.1).unwrap())
+                    .filter(|kv| object::PdfIndirectRef::ensure(kv.1).is_ok())
+                    .map(|kv| object::PdfIndirectRef::ensure(kv.1).unwrap())
                 {
-                    xobj_vec.push(indirect_ref);
+                    xobj_vec.push(indirect_ref.clone());
                 }
             }
         }
 
-        let may_thumnail_ref = if let Some(thumbnail_ref) = node_map.get(&"Thumb".to_string()) {
-            Some(object::ensure_indirect_ref(thumbnail_ref)?)
+        let may_thumnail_ref = if let Some(thumbnail_ref) = node_dict.get("Thumb") {
+            Some(object::PdfIndirectRef::ensure(thumbnail_ref)?.clone())
         } else {
             None
         };
@@ -87,14 +88,14 @@ fn parse_page_tree_node(
             thumbnail: may_thumnail_ref,
             external_objects: xobj_vec,
         });
-    } else if let Ok(_) = object::ensure_dict_type(node_map, "Pages") {
-        let node_map = object::ensure_dict_with_key(&node_obj, vec!["Kids", "Count"])?;
+    } else if let Ok(_) = object::PdfDict::ensure_type(node_dict, "Pages") {
+        let node_map = object::PdfDict::ensure_with_key(&node_obj, vec!["Kids", "Count"])?;
 
-        let kids = node_map.get(&"Kids".to_string()).unwrap();
-        let kids = object::ensure_array(kids)?;
+        let kids = node_map.get("Kids").unwrap();
+        let kids = object::PdfArray::ensure(kids)?;
 
         for kid in kids {
-            let kid_ref = object::ensure_indirect_ref(kid)?;
+            let kid_ref = object::PdfIndirectRef::ensure(&kid)?;
             parse_page_tree_node(file, xref, kid_ref, page_list)?;
         }
     } else {
@@ -113,18 +114,20 @@ impl Page {
         let mut images: Vec<image_lib::RgbImage> = vec![];
 
         for xobj_ref in &(self.external_objects) {
-            let obj = object::get_indirect_obj(file, &xref, *xobj_ref)?;
-            let (dict_obj, byte_vec) = object::get_stream(file, &xref, &obj)?;
+            let obj = xobj_ref.get_indirect_obj(file, &xref)?;
+            let stream_obj = object::PdfStreamObj::ensure_stream(&obj)?;
+            let byte_vec = stream_obj.get_stream(file, xref)?;
 
-            let map = object::ensure_dict_with_key(dict_obj, vec!["Subtype"])?;
+            let dict = &stream_obj.dict;
+            dict.assert_with_key(vec!["Subtype"])?;
 
-            let subtype = object::ensure_name(map.get(&"Subtype".to_string()).unwrap())?;
+            let subtype = object::PdfName::ensure(dict.get("Subtype").unwrap())?;
 
             if subtype != "Image" {
                 panic!("subtype is not image");
             }
 
-            let image_param = image_localmod::ImageDecodeParam::new(dict_obj, file, xref).unwrap();
+            let image_param = image_localmod::ImageDecodeParam::new(&dict, file, xref).unwrap();
 
             images.push(image_localmod::decode_image(&image_param, &byte_vec).unwrap());
         }

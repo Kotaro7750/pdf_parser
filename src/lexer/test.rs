@@ -33,7 +33,10 @@ fn tokenize_integer() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Integer(123), Token::Integer(-123)],
+        &vec![
+            Token::new(TokenContent::Integer(123), 1),
+            Token::new(TokenContent::Integer(-123), 6),
+        ],
     )
 }
 
@@ -47,13 +50,13 @@ fn tokenize_float() {
     assert_eq_token_vec(
         &lexer.token_vec,
         &vec![
-            Token::Real(1.5),
-            Token::Real(-23.4),
-            Token::Real(110.0),
-            Token::Real(0.5),
-            Token::Real(4.0),
-            Token::Real(-0.002),
-            Token::Real(0.0),
+            Token::new(TokenContent::Real(1.5), 0),
+            Token::new(TokenContent::Real(-23.4), 4),
+            Token::new(TokenContent::Real(110.0), 10),
+            Token::new(TokenContent::Real(0.5), 17),
+            Token::new(TokenContent::Real(4.0), 20),
+            Token::new(TokenContent::Real(-0.002), 23),
+            Token::new(TokenContent::Real(0.0), 29),
         ],
     )
 }
@@ -65,7 +68,10 @@ fn tokenize_hex_str() {
 
     lexer.tokenize().unwrap();
 
-    assert_eq_token_vec(&lexer.token_vec, &vec![Token::HexStr(vec![160, 224, 240])])
+    assert_eq_token_vec(
+        &lexer.token_vec,
+        &vec![Token::new(TokenContent::HexStr(vec![160, 224, 240]), 0)],
+    )
 }
 
 #[test]
@@ -77,9 +83,12 @@ fn tokenize_string() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::String(vec![
-            104, 111, 103, 101, 32, 9, 32, 92, 32, 43, 32, 40, 5, 51, 41,
-        ])],
+        &vec![Token::new(
+            TokenContent::String(vec![
+                104, 111, 103, 101, 32, 9, 32, 92, 32, 43, 32, 40, 5, 51, 41,
+            ]),
+            0,
+        )],
     )
 }
 
@@ -93,11 +102,11 @@ fn tokenize_array() {
     assert_eq_token_vec(
         &lexer.token_vec,
         &vec![
-            Token::ArrayStart,
-            Token::Integer(123),
-            Token::String(vec![97, 97, 40]),
-            Token::Real(-55.0),
-            Token::ArrayEnd,
+            Token::new(TokenContent::ArrayStart, 0),
+            Token::new(TokenContent::Integer(123), 1),
+            Token::new(TokenContent::String(vec![97, 97, 40]), 5),
+            Token::new(TokenContent::Real(-55.0), 12),
+            Token::new(TokenContent::ArrayEnd, 16),
         ],
     )
 }
@@ -109,7 +118,10 @@ fn tokenize_indirect_ref() {
 
     lexer.tokenize().unwrap();
 
-    assert_eq_token_vec(&lexer.token_vec, &vec![Token::IndirectRef(1, 0)])
+    assert_eq_token_vec(
+        &lexer.token_vec,
+        &vec![Token::new(TokenContent::IndirectRef(1, 0), 0)],
+    )
 }
 
 #[test]
@@ -121,7 +133,10 @@ fn tokenize_name() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Name(String::from("Name..;$@?!"))],
+        &vec![Token::new(
+            TokenContent::Name(String::from("Name..;$@?!")),
+            0,
+        )],
     )
 }
 
@@ -134,7 +149,10 @@ fn tokenize_comment() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Name(String::from("Name")), Token::Integer(123)],
+        &vec![
+            Token::new(TokenContent::Name(String::from("Name")), 0),
+            Token::new(TokenContent::Integer(123), 28),
+        ],
     )
 }
 
@@ -147,7 +165,11 @@ fn tokenize_boolean_null() {
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::Null, Token::Boolean(true), Token::Boolean(false)],
+        &vec![
+            Token::new(TokenContent::Null, 0),
+            Token::new(TokenContent::Boolean(true), 5),
+            Token::new(TokenContent::Boolean(false), 10),
+        ],
     )
 }
 
@@ -162,9 +184,9 @@ fn tokenize_indirect_obj() {
     assert_eq_token_vec(
         &lexer.token_vec,
         &vec![
-            Token::IndirectObjStart(1, 0),
-            Token::Integer(123),
-            Token::IndirectObjEnd,
+            Token::new(TokenContent::IndirectObjStart(1, 0), 0),
+            Token::new(TokenContent::Integer(123), 8),
+            Token::new(TokenContent::IndirectObjEnd, 12),
         ],
     )
 }

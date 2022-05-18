@@ -1,53 +1,63 @@
 use std::collections::HashMap;
 
 pub mod error;
+
 use crate::lexer;
-use crate::lexer::Token;
+use crate::lexer::{Token, TokenContent};
+use crate::object::{
+    PdfArray, PdfBoolean, PdfDict, PdfIndirectObj, PdfIndirectRef, PdfInteger, PdfName, PdfNull,
+    PdfReal, PdfStreamObj, PdfString,
+};
+use error::{Error, ErrorKind};
 
 #[cfg(test)]
 pub mod test;
 
-#[derive(PartialEq, Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Object {
-    Boolean(bool),
-    Integer(isize),
-    Real(f64),
-    Name(String),
-    String(Vec<u8>),
-    Array(Vec<Object>),
-    Null,
-    IndirectRef(u64, u64),
-    Dict(HashMap<String, Object>),
-    IndirectObj(Box<Object>),
-    // ストリームバイト列が始まるバイトオフセット
-    StreamObj(Box<Object>, u64),
+    Boolean(PdfBoolean),
+    Integer(PdfInteger),
+    Real(PdfReal),
+    Name(PdfName),
+    String(PdfString),
+    Array(PdfArray),
+    Null(PdfNull),
+    IndirectRef(PdfIndirectRef),
+    Dict(PdfDict),
+    IndirectObj(PdfIndirectObj),
+    StreamObj(PdfStreamObj),
 }
 
 pub struct Parser {
     token_i: usize,
+    byte_offset: u64,
     token_vec: Vec<Token>,
 }
 
 impl Parser {
-    pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Result<Parser, error::Error> {
+    pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Result<Parser, Error> {
         if buffer.len() == 0 {
-            return Err(error::Error::EmptyBuffer);
+            panic!("buffer is empty");
         };
 
         let mut lexer = lexer::Lexer::new(buffer, buffer_start_offset);
 
         if let Err(e) = lexer.tokenize() {
-            return Err(error::Error::Lexer(e));
+            return Err(Error::new(ErrorKind::Lexer(e), buffer_start_offset));
         };
 
         if lexer.has_unbalanced_indirectobj() {
-            return Err(error::Error::IndirectObjMissMatch);
+            return Err(Error::new(
+                ErrorKind::IndirectObjMissMatch,
+                buffer_start_offset,
+            ));
         }
 
         let token_vec = lexer.token_vec;
 
         Ok(Parser {
             token_vec,
+            byte_offset: buffer_start_offset,
             token_i: 0,
         })
     }
@@ -78,60 +88,72 @@ impl Parser {
     fn parse_object(&mut self) -> Result<Object, error::Error> {
         let token = match self.next() {
             Some(token) => token,
-            None => return Err(error::Error::NoToken),
+            None => return Err(Error::new(ErrorKind::NoToken, self.byte_offset)),
         };
 
-        if let Token::Boolean(boolean) = token {
-            return Ok(Object::Boolean(*boolean));
+        if let TokenContent::Boolean(boolean) = token.content() {
+            return Ok(Object::Boolean(PdfBoolean::new(*boolean)));
         };
 
-        if let Token::Integer(int) = token {
-            return Ok(Object::Integer(*int));
+        if let TokenContent::Integer(int) = token.content() {
+            return Ok(Object::Integer(PdfInteger::new(*int)));
         }
 
-        if let Token::Real(real) = token {
-            return Ok(Object::Real(*real));
+        if let TokenContent::Real(real) = token.content() {
+            return Ok(Object::Real(PdfReal::new(*real)));
         }
 
-        if let Token::Name(str) = token {
-            return Ok(Object::Name((*str).clone()));
+        if let TokenContent::Name(str) = token.content() {
+            return Ok(Object::Name(PdfName::new((*str).clone())));
         }
 
-        if let Token::Null = token {
-            return Ok(Object::Null);
+        if let TokenContent::Null = token.content() {
+            return Ok(Object::Null(PdfNull));
         }
 
-        if let Token::HexStr(vec) = token {
-            return Ok(Object::String((*vec).clone()));
+        if let TokenContent::HexStr(vec) = token.content() {
+            return Ok(Object::String(PdfString::new((*vec).clone())));
         }
 
-        if let Token::String(vec) = token {
-            return Ok(Object::String((*vec).clone()));
+        if let TokenContent::String(vec) = token.content() {
+            return Ok(Object::String(PdfString::new((*vec).clone())));
         }
 
-        if let Token::IndirectRef(obj_num, gen_num) = token {
-            return Ok(Object::IndirectRef(*obj_num, *gen_num));
+        if let TokenContent::IndirectRef(obj_num, gen_num) = token.content() {
+            return Ok(Object::IndirectRef(PdfIndirectRef::new(*obj_num, *gen_num)));
         }
 
-        if let Token::ArrayStart = token {
-            return Ok(Object::Array(self.parse_array_content()?));
+        if let TokenContent::ArrayStart = token.content() {
+            return Ok(Object::Array(PdfArray::new(self.parse_array_content()?)));
         }
 
-        if let Token::DictStart = token {
-            return Ok(Object::Dict(self.parse_dict_content()?));
+        if let TokenContent::DictStart = token.content() {
+            return Ok(Object::Dict(PdfDict::new(self.parse_dict_content()?)));
         }
 
-        if let Token::IndirectObjStart(_, _) = token {
+        if let TokenContent::IndirectObjStart(_, _) = token.content() {
             let obj = self.parse_indirect_content()?;
 
-            return if let Some(Token::StreamObjStart(offset)) = self.next() {
-                Ok(Object::StreamObj(obj, *offset))
+            if let Some(Token {
+                token_content: TokenContent::StreamObjStart(offset),
+                byte_offset: _,
+            }) = self.next()
+            {
+                let stream = match PdfStreamObj::new(obj, *offset) {
+                    Ok(obj) => return Ok(Object::StreamObj(obj)),
+                    Err(_) => {
+                        return Err(Error::new(ErrorKind::InvalidStreamObj, self.byte_offset))
+                    }
+                };
             } else {
-                Ok(Object::IndirectObj(obj))
+                return Ok(Object::IndirectObj(PdfIndirectObj::new(obj)));
             };
         }
 
-        Err(error::Error::UnexpectedToken(token.clone()))
+        Err(Error::new(
+            ErrorKind::UnexpectedToken(token.clone()),
+            token.byte_offset,
+        ))
     }
 
     fn parse_array_content(&mut self) -> Result<Vec<Object>, error::Error> {
@@ -142,17 +164,17 @@ impl Parser {
             may_token = self.current_token();
 
             if let None = may_token {
-                return Err(error::Error::NoToken);
+                return Err(Error::new(ErrorKind::NoToken, self.byte_offset));
             }
 
             let token = may_token.unwrap();
 
-            if let Token::EOL = token {
+            if let TokenContent::EOL = token.content() {
                 self.next();
                 continue;
             }
 
-            if let Token::ArrayEnd = token {
+            if let TokenContent::ArrayEnd = token.content() {
                 self.next();
                 return Ok(content);
             }
@@ -172,12 +194,12 @@ impl Parser {
             may_token = self.current_token();
 
             if let None = may_token {
-                return Err(error::Error::NoToken);
+                return Err(Error::new(ErrorKind::NoToken, self.byte_offset));
             }
 
             let token = may_token.unwrap();
 
-            if let Token::EOL = token {
+            if let TokenContent::EOL = token.content() {
                 self.next();
                 continue;
             }
@@ -186,30 +208,40 @@ impl Parser {
                 content.insert(key.clone(), self.parse_object()?);
                 is_prev_name = false;
             } else {
-                if let Token::Name(string) = token {
+                if let TokenContent::Name(string) = token.content() {
                     key = string.clone();
                     // TODO キーの重複はどうする？
                     is_prev_name = true;
                     self.next();
                     continue;
-                } else if let Token::DictEnd = token {
+                } else if let TokenContent::DictEnd = token.content() {
                     self.next();
                     return Ok(content);
                 } else {
-                    return Err(error::Error::UnexpectedToken(token.clone()));
+                    return Err(Error::new(
+                        ErrorKind::UnexpectedToken(token.clone()),
+                        token.byte_offset,
+                    ));
                 }
             }
         }
     }
 
-    fn parse_indirect_content(&mut self) -> Result<Box<Object>, error::Error> {
+    fn parse_indirect_content(&mut self) -> Result<Object, error::Error> {
         let obj = self.parse_object()?;
 
-        if let Some(Token::IndirectObjEnd) = self.next() {
-            Ok(Box::new(obj))
-        } else {
-            // TODO
-            Err(error::Error::NoToken)
+        match self.next() {
+            Some(token) => match token {
+                Token {
+                    token_content: TokenContent::IndirectObjEnd,
+                    byte_offset: _,
+                } => Ok(obj),
+                _ => Err(Error::new(
+                    ErrorKind::UnexpectedToken(token.clone()),
+                    token.byte_offset,
+                )),
+            },
+            None => Err(Error::new(ErrorKind::NoToken, self.byte_offset)),
         }
     }
 }
