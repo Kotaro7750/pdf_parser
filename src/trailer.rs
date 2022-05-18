@@ -72,7 +72,7 @@ fn parse_xref_offset(buffer: &[u8], byte_offset: u64) -> Result<u64, error::Erro
         Err(e) => return Err(error::Error::ParseXRefOffset(e)),
     };
 
-    if xref_byte_offset <= object::PdfInteger::new(0) {
+    if xref_byte_offset.unpack() <= 0 {
         panic!()
     }
 

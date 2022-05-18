@@ -45,10 +45,16 @@ impl PdfBoolean {
 impl PdfObject for PdfBoolean {}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct PdfInteger(isize);
+pub struct PdfInteger {
+    payload: isize,
+    byte_offset: u64,
+}
 impl PdfInteger {
-    pub fn new(i: isize) -> Self {
-        Self(i)
+    pub fn new(i: isize, byte_offset: u64) -> Self {
+        Self {
+            payload: i,
+            byte_offset,
+        }
     }
 
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
@@ -57,10 +63,9 @@ impl PdfInteger {
             _ => Err(Error::NotInteger(format!("{:?}", obj))),
         }
     }
-}
-impl AsRef<isize> for PdfInteger {
-    fn as_ref(&self) -> &isize {
-        &self.0
+
+    pub fn unpack(&self) -> isize {
+        self.payload
     }
 }
 impl PdfObject for PdfInteger {}
@@ -68,8 +73,8 @@ impl PdfObject for PdfInteger {}
 impl std::convert::TryFrom<PdfInteger> for u64 {
     type Error = ();
     fn try_from(value: PdfInteger) -> Result<Self, Self::Error> {
-        if value.0 > 0 {
-            Ok(value.0 as u64)
+        if value.payload > 0 {
+            Ok(value.payload as u64)
         } else {
             Err(())
         }
@@ -322,12 +327,12 @@ impl PdfStreamObj {
         xref: &cross_reference::XRef,
     ) -> Result<Vec<u8>, Error> {
         let length = match self.dict.get("Length").unwrap() {
-            Object::Integer(int) => int.0,
+            Object::Integer(int) => int.unpack(),
             Object::IndirectRef(indirect_ref) => {
                 let may_indirect_obj = indirect_ref.get_indirect_obj(file, xref)?;
                 let indirect_obj = PdfIndirectObj::ensure(&may_indirect_obj)?;
 
-                PdfInteger::ensure(indirect_obj.get_object())?.0
+                PdfInteger::ensure(indirect_obj.get_object())?.unpack()
             }
             o => return Err(Error::NotInteger(format!("{:?}", o))),
         };

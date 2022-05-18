@@ -10,7 +10,7 @@ fn parse_integer() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::Integer(PdfInteger::new(123)));
+    assert_eq!(obj, Object::Integer(PdfInteger::new(123, 0)));
 }
 
 #[test]
@@ -76,7 +76,7 @@ fn parse_array_1() {
     assert_eq!(
         obj,
         Object::Array(PdfArray::new(vec![
-            Object::Integer(PdfInteger::new(123)),
+            Object::Integer(PdfInteger::new(123, 3)),
             Object::Boolean(PdfBoolean::new(true)),
             Object::Real(PdfReal::new(-12.0)),
             Object::Array(PdfArray::new(vec![
@@ -104,7 +104,7 @@ fn parse_dict_1() {
     inner_hm.insert(
         String::from("arr"),
         Object::Array(PdfArray::new(vec![
-            Object::Integer(PdfInteger::new(123)),
+            Object::Integer(PdfInteger::new(123, 28)),
             Object::Name(PdfName::new(String::from("name"))),
         ])),
     );

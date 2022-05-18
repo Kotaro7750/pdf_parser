@@ -96,7 +96,7 @@ impl Parser {
         };
 
         if let TokenContent::Integer(int) = token.content() {
-            return Ok(Object::Integer(PdfInteger::new(*int)));
+            return Ok(Object::Integer(PdfInteger::new(*int, token.byte_offset)));
         }
 
         if let TokenContent::Real(real) = token.content() {

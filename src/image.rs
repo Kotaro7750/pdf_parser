@@ -60,8 +60,8 @@ impl ImageDecodeParam {
         let width = object::PdfInteger::ensure(&image_dict.get("Width").unwrap())?;
         let height = object::PdfInteger::ensure(&image_dict.get("Height").unwrap())?;
 
-        let width = *width.as_ref() as u32;
-        let height = *height.as_ref() as u32;
+        let width = width.unpack() as u32;
+        let height = height.unpack() as u32;
 
         let colorspace = get_colorspace(image_dict, file, xref)?;
 
