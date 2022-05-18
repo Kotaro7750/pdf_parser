@@ -50,7 +50,7 @@ fn parse_indirect_ref() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::IndirectRef(PdfIndirectRef::new(1, 0)));
+    assert_eq!(obj, Object::IndirectRef(PdfIndirectRef::new(1, 0, 0)));
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn parse_array_1() {
                 Object::Real(PdfReal::new(-12.0, 16)),
                 Object::Array(PdfArray::new(
                     vec![
-                        Object::IndirectRef(PdfIndirectRef::new(2, 1)),
+                        Object::IndirectRef(PdfIndirectRef::new(2, 1, 21)),
                         Object::Null(PdfNull::new(27))
                     ],
                     20
@@ -103,7 +103,7 @@ fn parse_dict_1() {
     let mut hm = HashMap::new();
     hm.insert(
         String::from("hoge"),
-        Object::IndirectRef(PdfIndirectRef::new(1, 0)),
+        Object::IndirectRef(PdfIndirectRef::new(1, 0, 8)),
     );
 
     let mut inner_hm = HashMap::new();

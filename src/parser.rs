@@ -131,7 +131,11 @@ impl Parser {
         }
 
         if let TokenContent::IndirectRef(obj_num, gen_num) = token.content() {
-            return Ok(Object::IndirectRef(PdfIndirectRef::new(*obj_num, *gen_num)));
+            return Ok(Object::IndirectRef(PdfIndirectRef::new(
+                *obj_num,
+                *gen_num,
+                token_byte_offset,
+            )));
         }
 
         if let TokenContent::ArrayStart = token.content() {

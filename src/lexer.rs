@@ -268,9 +268,8 @@ impl<'a> Lexer<'a> {
 
     fn cancel_token(&mut self) -> Option<Token> {
         let may_token = self.token_vec.pop();
-        let may_last_token = self.token_vec.last();
 
-        match may_last_token {
+        match &may_token {
             Some(token) => {
                 // 元々usizeだったのでキャストしても大丈夫なはず
                 self.token_head_i = (token.byte_offset - self.buffer_start_offset) as usize

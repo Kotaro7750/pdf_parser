@@ -192,18 +192,18 @@ impl PdfNull {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PdfIndirectRef {
-    object_number: usize,
-    generation_number: usize,
+    payload: (usize, usize),
+    byte_offset: u64,
 }
 impl PdfIndirectRef {
-    pub fn new(object_number: usize, generation_number: usize) -> Self {
+    pub fn new(object_number: usize, generation_number: usize, byte_offset: u64) -> Self {
         if object_number == 0 {
             panic!("object number must not be 0");
         }
 
         Self {
-            object_number,
-            generation_number,
+            payload: (object_number, generation_number),
+            byte_offset,
         }
     }
 
@@ -219,7 +219,7 @@ impl PdfIndirectRef {
         file: &mut File,
         xref: &cross_reference::XRef,
     ) -> Result<Object, Error> {
-        let offset = xref.get_object_byte_offset(file, self.object_number, self.generation_number);
+        let offset = xref.get_object_byte_offset(file, self.payload.0, self.payload.1);
 
         let mut buf_size = 200;
         let mut buffer: Vec<u8>;

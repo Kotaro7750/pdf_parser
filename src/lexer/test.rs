@@ -112,15 +112,31 @@ fn tokenize_array() {
 }
 
 #[test]
-fn tokenize_indirect_ref() {
-    let buffer = "1 0 R".as_bytes();
+fn tokenize_indirect_ref_1() {
+    let buffer = "  1 0 R".as_bytes();
     let mut lexer = Lexer::new(buffer, 0);
 
     lexer.tokenize().unwrap();
 
     assert_eq_token_vec(
         &lexer.token_vec,
-        &vec![Token::new(TokenContent::IndirectRef(1, 0), 0)],
+        &vec![Token::new(TokenContent::IndirectRef(1, 0), 2)],
+    )
+}
+
+#[test]
+fn tokenize_indirect_ref_2() {
+    let buffer = "123 1 0 R".as_bytes();
+    let mut lexer = Lexer::new(buffer, 0);
+
+    lexer.tokenize().unwrap();
+
+    assert_eq_token_vec(
+        &lexer.token_vec,
+        &vec![
+            Token::new(TokenContent::Integer(123), 0),
+            Token::new(TokenContent::IndirectRef(1, 0), 4),
+        ],
     )
 }
 
