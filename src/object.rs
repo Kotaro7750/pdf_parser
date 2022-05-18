@@ -88,10 +88,20 @@ impl std::convert::TryFrom<PdfInteger> for u64 {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PdfReal(f64);
+pub struct PdfReal {
+    payload: f64,
+    byte_offset: u64,
+}
 impl PdfReal {
-    pub fn new(f: f64) -> Self {
-        Self(f)
+    pub fn new(f: f64, byte_offset: u64) -> Self {
+        Self {
+            payload: f,
+            byte_offset,
+        }
+    }
+
+    pub fn unpack(&self) -> f64 {
+        self.payload
     }
 }
 

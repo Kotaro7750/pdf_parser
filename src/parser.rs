@@ -103,7 +103,7 @@ impl Parser {
         }
 
         if let TokenContent::Real(real) = token.content() {
-            return Ok(Object::Real(PdfReal::new(*real)));
+            return Ok(Object::Real(PdfReal::new(*real, token.byte_offset)));
         }
 
         if let TokenContent::Name(str) = token.content() {

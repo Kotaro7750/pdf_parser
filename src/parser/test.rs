@@ -20,7 +20,7 @@ fn parse_real() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::Real(PdfReal::new(-123.0)));
+    assert_eq!(obj, Object::Real(PdfReal::new(-123.0, 0)));
 }
 
 #[test]
@@ -78,7 +78,7 @@ fn parse_array_1() {
         Object::Array(PdfArray::new(vec![
             Object::Integer(PdfInteger::new(123, 3)),
             Object::Boolean(PdfBoolean::new(true, 8)),
-            Object::Real(PdfReal::new(-12.0)),
+            Object::Real(PdfReal::new(-12.0, 16)),
             Object::Array(PdfArray::new(vec![
                 Object::IndirectRef(PdfIndirectRef::new(2, 1)),
                 Object::Null(PdfNull::new())
