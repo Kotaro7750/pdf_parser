@@ -40,7 +40,7 @@ fn parse_null() {
     let mut parser = Parser::new(buffer, 0).unwrap();
     let obj = parser.parse_object().unwrap();
 
-    assert_eq!(obj, Object::Null(PdfNull::new()));
+    assert_eq!(obj, Object::Null(PdfNull::new(0)));
 }
 
 #[test]
@@ -83,7 +83,7 @@ fn parse_array_1() {
                 Object::Array(PdfArray::new(
                     vec![
                         Object::IndirectRef(PdfIndirectRef::new(2, 1)),
-                        Object::Null(PdfNull::new())
+                        Object::Null(PdfNull::new(27))
                     ],
                     20
                 ))

@@ -113,7 +113,7 @@ impl Parser {
         }
 
         if let TokenContent::Null = token.content() {
-            return Ok(Object::Null(PdfNull));
+            return Ok(Object::Null(PdfNull::new(token_byte_offset)));
         }
 
         if let TokenContent::HexStr(vec) = token.content() {

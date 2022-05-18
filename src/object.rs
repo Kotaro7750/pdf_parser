@@ -181,10 +181,12 @@ impl<'a> std::iter::IntoIterator for &'a PdfArray {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PdfNull;
+pub struct PdfNull {
+    byte_offset: u64,
+}
 impl PdfNull {
-    pub fn new() -> Self {
-        Self
+    pub fn new(byte_offset: u64) -> Self {
+        Self { byte_offset }
     }
 }
 
