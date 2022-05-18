@@ -107,7 +107,7 @@ impl Parser {
         }
 
         if let TokenContent::Name(str) = token.content() {
-            return Ok(Object::Name(PdfName::new((*str).clone())));
+            return Ok(Object::Name(PdfName::new(str.clone(), token.byte_offset)));
         }
 
         if let TokenContent::Null = token.content() {

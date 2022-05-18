@@ -105,7 +105,7 @@ fn parse_dict_1() {
         String::from("arr"),
         Object::Array(PdfArray::new(vec![
             Object::Integer(PdfInteger::new(123, 28)),
-            Object::Name(PdfName::new(String::from("name"))),
+            Object::Name(PdfName::new(String::from("name"), 32)),
         ])),
     );
 

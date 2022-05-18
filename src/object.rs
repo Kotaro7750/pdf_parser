@@ -106,10 +106,16 @@ impl PdfReal {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub struct PdfName(String);
+pub struct PdfName {
+    payload: String,
+    byte_offset: u64,
+}
 impl PdfName {
-    pub fn new(str: String) -> Self {
-        Self(str)
+    pub fn new(s: String, byte_offset: u64) -> Self {
+        Self {
+            payload: s,
+            byte_offset,
+        }
     }
 
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
@@ -120,13 +126,13 @@ impl PdfName {
     }
 
     pub fn as_str(&self) -> &str {
-        self.0.as_str()
+        self.payload.as_str()
     }
 }
 
 impl PartialEq<str> for PdfName {
     fn eq(&self, other: &str) -> bool {
-        self.0 == other
+        self.payload == other
     }
 }
 
@@ -270,7 +276,7 @@ impl PdfDict {
         } else {
             Err(Error::DictTypeMissMatch(
                 expected_type.to_string(),
-                (&type_obj).0.clone(),
+                (&type_obj).payload.clone(),
             ))
         }
     }
