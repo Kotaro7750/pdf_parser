@@ -13,7 +13,6 @@ use crate::parser::Object;
 #[derive(Debug)]
 pub enum Error {
     Io(std::io::Error),
-    Parser(parser::error::Error),
     ObjectTypeMissMatch {
         required_type: &'static str,
         byte_offset: u64,
