@@ -18,8 +18,7 @@ pub enum Error {
         required_type: &'static str,
         byte_offset: u64,
     },
-    ObjectRestriction(String),
-    DictKeyNotFound(String),
+    DictKeyNotFound(&'static str),
     DictTypeMissMatch(String, String),
 }
 
@@ -398,7 +397,7 @@ impl PdfDict {
         for ref key in keys {
             let key_str = String::from(*key);
             if let None = self.payload.get(&key_str) {
-                return Err(Error::DictKeyNotFound(key.to_string()));
+                return Err(Error::DictKeyNotFound(key));
             }
         }
 
