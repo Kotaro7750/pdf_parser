@@ -322,10 +322,16 @@ impl PdfDict {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PdfIndirectObj(Box<Object>);
+pub struct PdfIndirectObj {
+    payload: Box<Object>,
+    byte_offset: u64,
+}
 impl PdfIndirectObj {
-    pub fn new(obj: Object) -> Self {
-        Self(Box::new(obj))
+    pub fn new(obj: Object, byte_offset: u64) -> Self {
+        Self {
+            payload: Box::new(obj),
+            byte_offset,
+        }
     }
 
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
@@ -336,7 +342,7 @@ impl PdfIndirectObj {
     }
 
     pub fn get_object(&self) -> &Object {
-        &*self.0
+        &*self.payload
     }
 }
 

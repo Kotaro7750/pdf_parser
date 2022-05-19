@@ -167,7 +167,10 @@ impl Parser {
                     }
                 };
             } else {
-                return Ok(Object::IndirectObj(PdfIndirectObj::new(obj)));
+                return Ok(Object::IndirectObj(PdfIndirectObj::new(
+                    obj,
+                    token_byte_offset,
+                )));
             };
         }
 
