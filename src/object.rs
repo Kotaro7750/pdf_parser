@@ -19,6 +19,7 @@ pub enum Error {
     },
     DictKeyNotFound(&'static str),
     DictTypeMissMatch(String, String),
+    InvalidStreamLength,
 }
 
 impl From<std::io::Error> for Error {
@@ -487,8 +488,19 @@ impl PdfStreamObj {
         file: &mut File,
         xref: &cross_reference::XRef,
     ) -> Result<Vec<u8>, Error> {
+        let length = self.get_length_recursive(file, xref)?;
+
+        let byte_vec = PdfStreamObj::get_stream_byte(file, self.byte_offset, length as u64)?;
+        Ok(byte_vec)
+    }
+
+    fn get_length_recursive(
+        &self,
+        file: &mut File,
+        xref: &cross_reference::XRef,
+    ) -> Result<isize, Error> {
         let length = match self.dict.get("Length").unwrap() {
-            Object::Integer(int) => int.unpack(),
+            Object::Integer(integer) => integer.unpack(),
             Object::IndirectRef(indirect_ref) => {
                 let may_indirect_obj = indirect_ref.get_indirect_obj(file, xref)?;
                 let indirect_obj = PdfIndirectObj::ensure(&may_indirect_obj)?;
@@ -499,12 +511,10 @@ impl PdfStreamObj {
         };
 
         if length < 0 {
-            // TODO
+            return Err(Error::InvalidStreamLength);
         }
 
-        let byte_vec = PdfStreamObj::get_stream_byte(file, self.byte_offset, length as u64)?;
-
-        Ok(byte_vec)
+        Ok(length)
     }
 
     fn get_stream_byte(file: &mut File, offset: u64, size: u64) -> Result<Vec<u8>, Error> {
