@@ -259,10 +259,16 @@ impl PdfIndirectRef {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct PdfDict(HashMap<String, Object>);
+pub struct PdfDict {
+    payload: HashMap<String, Object>,
+    byte_offset: u64,
+}
 impl PdfDict {
-    pub fn new(hm: HashMap<String, Object>) -> Self {
-        Self(hm)
+    pub fn new(hm: HashMap<String, Object>, byte_offset: u64) -> Self {
+        Self {
+            payload: hm,
+            byte_offset,
+        }
     }
 
     pub fn ensure_with_key<'a>(
@@ -280,7 +286,7 @@ impl PdfDict {
     }
 
     pub fn ensure_type(&self, expected_type: &'static str) -> Result<(), Error> {
-        let may_type_obj = self.0.get(&String::from("Type")).unwrap();
+        let may_type_obj = self.payload.get(&String::from("Type")).unwrap();
 
         let type_obj = PdfName::ensure(may_type_obj)?;
 
@@ -298,7 +304,7 @@ impl PdfDict {
     pub fn assert_with_key(&self, keys: Vec<&'static str>) -> Result<(), Error> {
         for ref key in keys {
             let key_str = String::from(*key);
-            if let None = self.0.get(&key_str) {
+            if let None = self.payload.get(&key_str) {
                 return Err(Error::DictKeyNotFound(key.to_string()));
             }
         }
@@ -307,11 +313,11 @@ impl PdfDict {
     }
 
     pub fn get(&self, key: &'static str) -> Option<&Object> {
-        self.0.get(key)
+        self.payload.get(key)
     }
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<String, Object> {
-        self.0.iter()
+        self.payload.iter()
     }
 }
 

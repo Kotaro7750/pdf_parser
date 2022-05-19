@@ -146,7 +146,10 @@ impl Parser {
         }
 
         if let TokenContent::DictStart = token.content() {
-            return Ok(Object::Dict(PdfDict::new(self.parse_dict_content()?)));
+            return Ok(Object::Dict(PdfDict::new(
+                self.parse_dict_content()?,
+                token_byte_offset,
+            )));
         }
 
         if let TokenContent::IndirectObjStart(_, _) = token.content() {

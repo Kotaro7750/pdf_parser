@@ -118,7 +118,10 @@ fn parse_dict_1() {
         )),
     );
 
-    hm.insert(String::from("fuga"), Object::Dict(PdfDict::new(inner_hm)));
+    hm.insert(
+        String::from("fuga"),
+        Object::Dict(PdfDict::new(inner_hm, 20)),
+    );
 
-    assert_eq!(obj, Object::Dict(PdfDict::new(hm)));
+    assert_eq!(obj, Object::Dict(PdfDict::new(hm, 0)));
 }
