@@ -17,7 +17,10 @@ impl Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{} at byte offset `{}`", self.kind, self.byte_offset)
+        match self.kind {
+            ErrorKind::Lexer(_) => write!(f, "{}", self.kind),
+            _ => write!(f, "{} at byte offset `{}`", self.kind, self.byte_offset),
+        }
     }
 }
 
