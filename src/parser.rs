@@ -6,7 +6,7 @@ use crate::lexer;
 use crate::lexer::{Token, TokenContent};
 use crate::object::{
     PdfArray, PdfBoolean, PdfDict, PdfIndirectObj, PdfIndirectRef, PdfInteger, PdfName, PdfNull,
-    PdfReal, PdfStreamObj, PdfString,
+    PdfObject, PdfReal, PdfStreamObj, PdfString,
 };
 use error::{Error, ErrorKind};
 
@@ -26,6 +26,24 @@ pub enum Object {
     Dict(PdfDict),
     IndirectObj(PdfIndirectObj),
     StreamObj(PdfStreamObj),
+}
+
+impl Object {
+    pub fn byte_offset(&self) -> u64 {
+        match self {
+            Object::Boolean(o) => o.byte_offset(),
+            Object::Integer(o) => o.byte_offset(),
+            Object::Real(o) => o.byte_offset(),
+            Object::Name(o) => o.byte_offset(),
+            Object::String(o) => o.byte_offset(),
+            Object::Array(o) => o.byte_offset(),
+            Object::Null(o) => o.byte_offset(),
+            Object::IndirectRef(o) => o.byte_offset(),
+            Object::Dict(o) => o.byte_offset(),
+            Object::IndirectObj(o) => o.byte_offset(),
+            Object::StreamObj(o) => o.byte_offset(),
+        }
+    }
 }
 
 pub struct Parser {

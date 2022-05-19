@@ -14,13 +14,10 @@ use crate::parser::Object;
 pub enum Error {
     Io(std::io::Error),
     Parser(parser::error::Error),
-    NotInteger(String),
-    NotName(String),
-    NotDictionary(String),
-    NotIndirectObj(String),
-    NotIndirectRef(String),
-    NotArray(String),
-    NotStream(String),
+    ObjectTypeMissMatch {
+        required_type: &'static str,
+        byte_offset: u64,
+    },
     ObjectRestriction(String),
     DictKeyNotFound(String),
     DictTypeMissMatch(String, String),
@@ -32,7 +29,11 @@ impl From<std::io::Error> for Error {
     }
 }
 
-// TODO マクロ展開をするマクロとかあるといいね
+pub trait PdfObject: std::fmt::Debug {
+    fn byte_offset(&self) -> u64;
+    fn type_missmatch_error(byte_offset: u64) -> Error;
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PdfBoolean {
     payload: bool,
@@ -48,6 +49,20 @@ impl PdfBoolean {
 
     pub fn unpack(&self) -> bool {
         self.payload
+    }
+}
+
+// TODO ほぼボイラープレートコードなのでマクロの使いどきかもしれない
+impl PdfObject for PdfBoolean {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "boolean",
+            byte_offset,
+        }
     }
 }
 
@@ -67,12 +82,25 @@ impl PdfInteger {
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
         match obj {
             Object::Integer(int) => Ok(int),
-            _ => Err(Error::NotInteger(format!("{:?}", obj))),
+            _ => Err(PdfInteger::type_missmatch_error(obj.byte_offset())),
         }
     }
 
     pub fn unpack(&self) -> isize {
         self.payload
+    }
+}
+
+impl PdfObject for PdfInteger {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "integer",
+            byte_offset,
+        }
     }
 }
 
@@ -104,6 +132,17 @@ impl PdfReal {
         self.payload
     }
 }
+impl PdfObject for PdfReal {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "real",
+            byte_offset,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct PdfName {
@@ -121,7 +160,7 @@ impl PdfName {
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
         match obj {
             Object::Name(name) => Ok(name),
-            _ => Err(Error::NotName(format!("{:?}", obj))),
+            _ => Err(PdfName::type_missmatch_error(obj.byte_offset())),
         }
     }
 
@@ -129,7 +168,17 @@ impl PdfName {
         self.payload.as_str()
     }
 }
-
+impl PdfObject for PdfName {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "name",
+            byte_offset,
+        }
+    }
+}
 impl PartialEq<str> for PdfName {
     fn eq(&self, other: &str) -> bool {
         self.payload == other
@@ -145,6 +194,17 @@ impl PdfString {
     pub fn new(s: Vec<u8>, byte_offset: u64) -> Self {
         Self {
             payload: s,
+            byte_offset,
+        }
+    }
+}
+impl PdfObject for PdfString {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "string",
             byte_offset,
         }
     }
@@ -166,7 +226,18 @@ impl PdfArray {
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
         match obj {
             Object::Array(array) => Ok(array),
-            _ => Err(Error::NotArray(format!("{:?}", obj))),
+            _ => Err(PdfArray::type_missmatch_error(obj.byte_offset())),
+        }
+    }
+}
+impl PdfObject for PdfArray {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "array",
+            byte_offset,
         }
     }
 }
@@ -187,6 +258,17 @@ pub struct PdfNull {
 impl PdfNull {
     pub fn new(byte_offset: u64) -> Self {
         Self { byte_offset }
+    }
+}
+impl PdfObject for PdfNull {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "null",
+            byte_offset,
+        }
     }
 }
 
@@ -210,7 +292,7 @@ impl PdfIndirectRef {
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
         match obj {
             Object::IndirectRef(indirect_ref) => Ok(indirect_ref),
-            _ => Err(Error::NotIndirectRef(format!("{:?}", obj))),
+            _ => Err(PdfIndirectRef::type_missmatch_error(obj.byte_offset())),
         }
     }
 
@@ -257,6 +339,17 @@ impl PdfIndirectRef {
         }
     }
 }
+impl PdfObject for PdfIndirectRef {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "indirect ref",
+            byte_offset,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct PdfDict {
@@ -277,7 +370,7 @@ impl PdfDict {
     ) -> Result<&'a Self, Error> {
         let dict = match obj {
             Object::Dict(obj) => obj,
-            _ => return Err(Error::NotDictionary(format!("{:?}", obj))),
+            _ => return Err(PdfDict::type_missmatch_error(obj.byte_offset())),
         };
 
         dict.assert_with_key(keys)?;
@@ -320,6 +413,17 @@ impl PdfDict {
         self.payload.iter()
     }
 }
+impl PdfObject for PdfDict {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "dictionary",
+            byte_offset,
+        }
+    }
+}
 
 #[derive(Debug, PartialEq)]
 pub struct PdfIndirectObj {
@@ -337,12 +441,23 @@ impl PdfIndirectObj {
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
         match obj {
             Object::IndirectObj(obj) => Ok(obj),
-            _ => return Err(Error::NotIndirectObj(format!("{:?}", obj))),
+            _ => return Err(PdfIndirectObj::type_missmatch_error(obj.byte_offset())),
         }
     }
 
     pub fn get_object(&self) -> &Object {
         &*self.payload
+    }
+}
+impl PdfObject for PdfIndirectObj {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "indirect object",
+            byte_offset,
+        }
     }
 }
 
@@ -365,7 +480,7 @@ impl PdfStreamObj {
     pub fn ensure_stream(obj: &Object) -> Result<&Self, Error> {
         match obj {
             Object::StreamObj(stream_obj) => Ok(stream_obj),
-            _ => Err(Error::NotStream(format!("{:?}", obj))),
+            _ => Err(PdfStreamObj::type_missmatch_error(obj.byte_offset())),
         }
     }
 
@@ -382,7 +497,7 @@ impl PdfStreamObj {
 
                 PdfInteger::ensure(indirect_obj.get_object())?.unpack()
             }
-            o => return Err(Error::NotInteger(format!("{:?}", o))),
+            o => return Err(PdfInteger::type_missmatch_error(o.byte_offset())),
         };
 
         if length < 0 {
@@ -404,5 +519,16 @@ impl PdfStreamObj {
         };
 
         Ok(buffer)
+    }
+}
+impl PdfObject for PdfStreamObj {
+    fn byte_offset(&self) -> u64 {
+        self.byte_offset
+    }
+    fn type_missmatch_error(byte_offset: u64) -> Error {
+        Error::ObjectTypeMissMatch {
+            required_type: "stream object",
+            byte_offset,
+        }
     }
 }
