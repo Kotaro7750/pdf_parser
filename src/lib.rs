@@ -11,6 +11,7 @@ mod page;
 mod parser;
 mod raw_byte;
 mod trailer;
+mod util;
 
 pub struct PDF<'a> {
     file: &'a mut File,

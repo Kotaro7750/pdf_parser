@@ -1,11 +1,9 @@
 use std::fs::File;
-use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom;
 use std::str;
 
 use crate::raw_byte;
 use crate::trailer;
+use crate::util::read_partially;
 
 pub struct XRef {
     pub actual_start_offset: u64,
@@ -16,14 +14,9 @@ pub struct XRef {
 impl XRef {
     pub fn new(file: &mut File, trailer_dict: &trailer::Trailer) -> XRef {
         // TODO なぜ30?
-        let mut buffer: [u8; 30] = [0; 30];
-
-        file.seek(SeekFrom::Start(trailer_dict.xref_start_offset))
-            .unwrap();
-
-        let n = file.read(&mut buffer).unwrap();
-
-        let buffer = &buffer[..n];
+        let buffer = read_partially(file, trailer_dict.xref_start_offset, 30).unwrap();
+        let buffer = buffer.as_slice();
+        let n = buffer.len();
 
         // xrefキーワードが書いてある行を読み飛ばす
         let buffer = raw_byte::extract_after(buffer, "xref".as_bytes()).unwrap();
@@ -53,7 +46,10 @@ impl XRef {
         }
     }
 
-    fn parse_entry(buffer: [u8; 18]) -> (u64, u64, bool) {
+    fn parse_entry(buffer: &[u8]) -> (u64, u64, bool) {
+        if buffer.len() != 18 {
+            panic!("cross reference entry must be 18 byte");
+        }
         let n_buf = &buffer[..10];
         let g_buf = &buffer[11..16];
         let t_byte = buffer[17];
@@ -77,13 +73,11 @@ impl XRef {
         // 1エントリはきっかり20バイトである
         let byte_offset = self.actual_start_offset + ((obj_num as u64 - self.from) * 20) as u64;
 
-        let mut buffer: [u8; 18] = [0; 18];
-
-        file.seek(SeekFrom::Start(byte_offset)).unwrap();
-
-        if file.read(&mut buffer).unwrap() != 18 {
+        let buffer = read_partially(file, byte_offset, 18).unwrap();
+        if buffer.len() != 18 {
             panic!("cannot read 18 byte");
         };
+        let buffer = buffer.as_slice();
 
         let (offset, gen, is_n) = Self::parse_entry(buffer);
 

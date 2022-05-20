@@ -1,13 +1,11 @@
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
-use std::io::Seek;
-use std::io::SeekFrom;
 use std::slice;
 
 use crate::cross_reference;
 use crate::parser;
 use crate::parser::Object;
+use crate::util::read_partially;
 
 // TODO 何のオブジェクトでエラーが出たのかわからない
 #[derive(Debug)]
@@ -303,16 +301,10 @@ impl PdfIndirectRef {
         let offset = xref.get_object_byte_offset(file, self.payload.0, self.payload.1);
 
         let mut buf_size = 200;
-        let mut buffer: Vec<u8>;
 
         loop {
-            file.seek(SeekFrom::Start(offset))?;
-
-            buffer = vec![0; buf_size];
-
-            let n = file.read(&mut buffer)?;
-
-            let buffer = &buffer[..n];
+            let buffer = read_partially(file, offset, buf_size)?;
+            let buffer = buffer.as_slice();
 
             let mut p = match parser::Parser::new(&buffer, offset) {
                 Ok(p) => p,
@@ -490,7 +482,11 @@ impl PdfStreamObj {
     ) -> Result<Vec<u8>, Error> {
         let length = self.get_length_recursive(file, xref)?;
 
-        let byte_vec = PdfStreamObj::get_stream_byte(file, self.byte_offset, length as u64)?;
+        let byte_vec = read_partially(file, self.byte_offset, length as u64)?;
+
+        if byte_vec.len() != length {
+            panic!("cannot read all");
+        }
         Ok(byte_vec)
     }
 
@@ -498,7 +494,7 @@ impl PdfStreamObj {
         &self,
         file: &mut File,
         xref: &cross_reference::XRef,
-    ) -> Result<isize, Error> {
+    ) -> Result<usize, Error> {
         let length = match self.dict.get("Length").unwrap() {
             Object::Integer(integer) => integer.unpack(),
             Object::IndirectRef(indirect_ref) => {
@@ -514,19 +510,7 @@ impl PdfStreamObj {
             return Err(Error::InvalidStreamLength);
         }
 
-        Ok(length)
-    }
-
-    fn get_stream_byte(file: &mut File, offset: u64, size: u64) -> Result<Vec<u8>, Error> {
-        let mut buffer = vec![0; size as usize];
-
-        file.seek(SeekFrom::Start(offset))?;
-
-        if file.read(&mut buffer)? as u64 != size {
-            panic!("Cannot read all");
-        };
-
-        Ok(buffer)
+        Ok(length.try_into().unwrap())
     }
 }
 impl PdfObject for PdfStreamObj {

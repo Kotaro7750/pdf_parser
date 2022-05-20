@@ -1,11 +1,10 @@
 use std::cmp;
 use std::fs::File;
-use std::io::Read;
-use std::io::Seek;
 
 use crate::object;
 use crate::parser;
 use crate::raw_byte;
+use crate::util::read_partially;
 
 pub mod error;
 
@@ -24,14 +23,10 @@ impl Trailer {
 pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::Error> {
     // 少なくともファイル末尾1024バイトにEOFマーカーが表れることは保証していい
     // cf. version1.7の仕様書 Appendix H の Implementation Note 18
-    let mut buffer: [u8; 1024] = [0; 1024];
     let byte_offset = cmp::max(filesize, 1024) - 1024;
+    let buffer = read_partially(file, byte_offset, 1024)?;
+    let buffer = buffer.as_slice();
 
-    file.seek(std::io::SeekFrom::Start(byte_offset))?;
-
-    let n = file.read(&mut buffer)?;
-
-    let buffer = &buffer[..n];
     let buffer = match raw_byte::cut_from(buffer, "%%EOF".as_bytes()) {
         Some(buffer) => buffer,
         None => return Err(error::Error::EOFNotFound),
