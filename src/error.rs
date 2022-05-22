@@ -1,3 +1,4 @@
+use crate::cross_reference;
 use crate::header;
 use crate::object;
 use crate::page;
@@ -8,6 +9,7 @@ pub enum Error {
     Io(std::io::Error),
     Header(header::Error),
     Trailer(trailer_error::Error),
+    Xref(cross_reference::Error),
     PageTree(page::Error),
     Object(object::Error),
 }
@@ -21,6 +23,12 @@ impl From<std::io::Error> for Error {
 impl From<trailer_error::Error> for Error {
     fn from(e: trailer_error::Error) -> Self {
         Self::Trailer(e)
+    }
+}
+
+impl From<cross_reference::Error> for Error {
+    fn from(e: cross_reference::Error) -> Self {
+        Self::Xref(e)
     }
 }
 
@@ -48,6 +56,7 @@ impl std::fmt::Display for Error {
             Error::Io(e) => write!(f, "{}", e),
             Error::Header(e) => write!(f, "header error: {}", e),
             Error::Trailer(e) => write!(f, "error on trailer: {}", e),
+            Error::Xref(e) => write!(f, "cross reference table error: {}", e),
             Error::PageTree(e) => write!(f, "Error on Page Tree: {:?}", e),
             Error::Object(e) => write!(f, "Error on Parsing Object: {}", e),
         }

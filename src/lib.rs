@@ -28,7 +28,7 @@ impl<'a> PDF<'a> {
         header::validate_pdf_header(file)?;
 
         let trailer = trailer::parse_trailer(file, size)?;
-        let mut xref = cross_reference::XRef::new(file, &trailer);
+        let mut xref = cross_reference::XRef::new(file, trailer.xref_start_offset)?;
 
         // ドキュメントカタログ
         let root_ref = trailer.get_root_catalog_ref();
