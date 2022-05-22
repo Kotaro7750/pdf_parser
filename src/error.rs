@@ -55,7 +55,7 @@ impl std::fmt::Display for Error {
         match self {
             Error::Io(e) => write!(f, "{}", e),
             Error::Header(e) => write!(f, "header error: {}", e),
-            Error::Trailer(e) => write!(f, "error on trailer: {}", e),
+            Error::Trailer(e) => write!(f, "trailer error: {}", e),
             Error::Xref(e) => write!(f, "cross reference table error: {}", e),
             Error::PageTree(e) => write!(f, "Error on Page Tree: {:?}", e),
             Error::Object(e) => write!(f, "Error on Parsing Object: {}", e),
