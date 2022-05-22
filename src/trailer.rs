@@ -10,7 +10,7 @@ pub mod error;
 
 pub struct Trailer {
     pub xref_start_offset: u64,
-    xref_entry_num: object::PdfInteger,
+    xref_entry_num: usize,
     root_catalog_ref: object::PdfIndirectRef,
 }
 
@@ -34,8 +34,10 @@ pub fn parse_trailer(file: &mut File, filesize: u64) -> Result<Trailer, error::E
 
     let may_trailer_dict = parse_trailer_dict(buffer, byte_offset)?;
     let trailer_dict = object::PdfDict::ensure_with_key(&may_trailer_dict, vec!["Size", "Root"])?;
+    let xref_entry_num = object::PdfInteger::ensure(trailer_dict.get("Size").unwrap())?;
+    xref_entry_num.assert_natural()?;
+    let xref_entry_num = xref_entry_num.unpack() as usize;
 
-    let xref_entry_num = object::PdfInteger::ensure(trailer_dict.get("Size").unwrap())?.clone();
     let root_catalog_ref =
         object::PdfIndirectRef::ensure(trailer_dict.get("Root").unwrap())?.clone();
 
@@ -67,11 +69,9 @@ fn parse_xref_offset(buffer: &[u8], byte_offset: u64) -> Result<u64, error::Erro
         Err(e) => return Err(error::Error::ParseXRefOffset(e)),
     };
 
-    if xref_byte_offset.unpack() <= 0 {
-        panic!()
-    }
+    xref_byte_offset.assert_natural()?;
 
-    Ok(u64::try_from(xref_byte_offset).unwrap())
+    Ok(xref_byte_offset.unpack() as u64)
 }
 
 fn parse_trailer_dict(buffer: &[u8], byte_offset: u64) -> Result<parser::Object, error::Error> {

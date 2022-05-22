@@ -33,6 +33,7 @@ pub enum ErrorKind {
     DictKeyNotFound(&'static str),
     DictTypeMissMatch(&'static str, String),
     InvalidStreamLength,
+    ValueRestriction(String),
     Parser(parser::error::Error),
 }
 impl std::fmt::Display for ErrorKind {
@@ -47,6 +48,7 @@ impl std::fmt::Display for ErrorKind {
                 expected, actual
             ),
             Self::InvalidStreamLength => write!(f, "stream object length is invalid"),
+            Self::ValueRestriction(s) => write!(f, "value doesn't satisfy restriction: {}", s),
             Self::Parser(e) => write!(f, "{}", e),
         }
     }
@@ -103,6 +105,28 @@ impl PdfInteger {
         match obj {
             Object::Integer(int) => Ok(int),
             _ => Err(PdfInteger::type_missmatch_error(obj.byte_offset())),
+        }
+    }
+
+    pub fn assert_natural(&self) -> Result<(), Error> {
+        if self.payload > 0 {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::ValueRestriction(String::from("value isn't natural")),
+                self.byte_offset,
+            ))
+        }
+    }
+
+    pub fn assert_not_negative(&self) -> Result<(), Error> {
+        if self.payload >= 0 {
+            Ok(())
+        } else {
+            Err(Error::new(
+                ErrorKind::ValueRestriction(String::from("value isn't not negative")),
+                self.byte_offset,
+            ))
         }
     }
 
