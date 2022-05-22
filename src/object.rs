@@ -34,6 +34,7 @@ pub enum ErrorKind {
     DictTypeMissMatch(&'static str, String),
     InvalidStreamLength,
     ValueRestriction(String),
+    Xref(Box<cross_reference::Error>),
     Parser(parser::error::Error),
 }
 impl std::fmt::Display for ErrorKind {
@@ -49,6 +50,7 @@ impl std::fmt::Display for ErrorKind {
             ),
             Self::InvalidStreamLength => write!(f, "stream object length is invalid"),
             Self::ValueRestriction(s) => write!(f, "value doesn't satisfy restriction: {}", s),
+            Self::Xref(e) => write!(f, "{}", e),
             Self::Parser(e) => write!(f, "{}", e),
         }
     }
@@ -327,7 +329,10 @@ impl PdfIndirectRef {
         file: &mut File,
         xref: &cross_reference::XRef,
     ) -> Result<Object, Error> {
-        let offset = xref.get_object_byte_offset(file, self.payload.0, self.payload.1);
+        let offset = match xref.get_byte_offset(file, self) {
+            Ok(offset) => offset,
+            Err(e) => return Err(Error::new(ErrorKind::Xref(Box::new(e)), self.byte_offset)),
+        };
 
         let mut buf_size = 200;
 
@@ -362,6 +367,10 @@ impl PdfIndirectRef {
 
             return Ok(obj);
         }
+    }
+
+    pub fn unpack(&self) -> (usize, usize) {
+        self.payload
     }
 }
 impl PdfObject for PdfIndirectRef {

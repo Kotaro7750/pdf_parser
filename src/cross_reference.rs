@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::str;
 
 use crate::object;
 use crate::parser;
@@ -10,7 +9,10 @@ use crate::util::read_partially;
 pub enum Error {
     Io(std::io::Error),
     XrefNotFound,
+    NotContain(usize),
+    GenerationNumberMisMatch,
     SubsectionNotFound,
+    NotSupporttedEntryType,
     Parser(parser::error::Error),
     Object(object::Error),
 }
@@ -34,6 +36,9 @@ impl std::fmt::Display for Error {
         match self {
             Self::Io(e) => write!(f, "io: {}", e),
             Self::XrefNotFound => write!(f, "xref is not found"),
+            Self::NotContain(obj_num) => write!(f, "object number `{}` is not contained", obj_num),
+            Self::GenerationNumberMisMatch => write!(f, "generation number miss match"),
+            Self::NotSupporttedEntryType => write!(f, "entry type is not supportted"),
             Self::SubsectionNotFound => {
                 write!(f, "subsection line is not found")
             }
@@ -134,45 +139,73 @@ impl XRef {
         Ok(object_num.unpack() as usize)
     }
 
-    fn parse_entry(buffer: &[u8]) -> (u64, u64, bool) {
+    pub fn get_byte_offset(
+        &self,
+        file: &mut File,
+        indirect_ref: &object::PdfIndirectRef,
+    ) -> Result<u64, Error> {
+        let (obj_num, gen_num) = indirect_ref.unpack();
+
+        if !self.contains(obj_num) {
+            return Err(Error::NotContain(obj_num));
+        }
+
+        let entry_byte_offset = self.entry_start_byte_offset(obj_num);
+
+        let entry_buffer = read_partially(file, entry_byte_offset, 18)?;
+        if entry_buffer.len() != 18 {
+            panic!("cannot read 18 byte");
+        };
+        let buffer = entry_buffer.as_slice();
+
+        let (offset, gen, is_n) = Self::parse_entry(buffer, entry_byte_offset)?;
+        if !is_n {
+            panic!("entry type f is not supportted yet")
+        }
+
+        if gen != gen_num {
+            return Err(Error::GenerationNumberMisMatch);
+        }
+
+        Ok(offset)
+    }
+
+    fn contains(&self, obj_num: usize) -> bool {
+        self.from <= obj_num && obj_num < (self.from + self.entry_num)
+    }
+
+    fn entry_start_byte_offset(&self, obj_num: usize) -> u64 {
+        self.actual_start_offset + ((obj_num - self.from) * 20) as u64
+    }
+
+    fn parse_entry(
+        buffer: &[u8],
+        entry_start_byte_offset: u64,
+    ) -> Result<(u64, usize, bool), Error> {
         if buffer.len() != 18 {
             panic!("cross reference entry must be 18 byte");
         }
+
         let n_buf = &buffer[..10];
         let g_buf = &buffer[11..16];
         let t_byte = buffer[17];
 
-        (
-            u64::from_str_radix(str::from_utf8(n_buf).unwrap(), 10).unwrap(),
-            u64::from_str_radix(str::from_utf8(g_buf).unwrap(), 10).unwrap(),
-            match t_byte {
-                110 => true,
-                103 => false,
-                _ => panic!("{} is not supported type", t_byte),
-            },
-        )
-    }
+        let n_obj = parser::Parser::new(n_buf, entry_start_byte_offset)?.parse()?;
+        let n_obj = object::PdfInteger::ensure(&n_obj)?;
+        n_obj.assert_not_negative()?;
+        let n = n_obj.unpack() as u64;
 
-    pub fn get_object_byte_offset(&self, file: &mut File, obj_num: usize, gen_num: usize) -> u64 {
-        if obj_num < self.from || (self.from + self.entry_num) <= obj_num {
-            panic!("object is not in cross reference");
-        }
+        let g_obj = parser::Parser::new(g_buf, entry_start_byte_offset + 12)?.parse()?;
+        let g_obj = object::PdfInteger::ensure(&g_obj)?;
+        g_obj.assert_not_negative()?;
+        let g = g_obj.unpack() as usize;
 
-        // 1エントリはきっかり20バイトである
-        let byte_offset = self.actual_start_offset + ((obj_num - self.from) * 20) as u64;
-
-        let buffer = read_partially(file, byte_offset, 18).unwrap();
-        if buffer.len() != 18 {
-            panic!("cannot read 18 byte");
+        let is_n = match t_byte {
+            110 => true,
+            103 => false,
+            _ => return Err(Error::NotSupporttedEntryType),
         };
-        let buffer = buffer.as_slice();
 
-        let (offset, gen, is_n) = Self::parse_entry(buffer);
-
-        if gen != gen_num as u64 {
-            panic!("generation number mismatch");
-        }
-
-        offset
+        Ok((n, g, is_n))
     }
 }
