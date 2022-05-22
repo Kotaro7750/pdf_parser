@@ -7,22 +7,44 @@ use crate::parser;
 use crate::parser::Object;
 use crate::util::read_partially;
 
-// TODO 何のオブジェクトでエラーが出たのかわからない
 #[derive(Debug)]
-pub enum Error {
-    Io(std::io::Error),
-    ObjectTypeMissMatch {
-        required_type: &'static str,
-        byte_offset: u64,
-    },
-    DictKeyNotFound(&'static str),
-    DictTypeMissMatch(String, String),
-    InvalidStreamLength,
+pub struct Error {
+    byte_offset: u64,
+    kind: ErrorKind,
+}
+impl Error {
+    fn new(kind: ErrorKind, byte_offset: u64) -> Self {
+        Self { kind, byte_offset }
+    }
+}
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{} at byte offset `{}`", self.kind, self.byte_offset)
+    }
 }
 
-impl From<std::io::Error> for Error {
-    fn from(e: std::io::Error) -> Self {
-        Self::Io(e)
+// TODO 何のオブジェクトでエラーが出たのかわからない
+#[derive(Debug)]
+pub enum ErrorKind {
+    Io(std::io::Error),
+    ObjectTypeMissMatch(&'static str),
+    DictKeyNotFound(&'static str),
+    DictTypeMissMatch(&'static str, String),
+    InvalidStreamLength,
+}
+impl std::fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Io(e) => write!(f, "{}", e),
+            Self::ObjectTypeMissMatch(s) => write!(f, "object type missmatch: required `{}`", s),
+            Self::DictKeyNotFound(s) => write!(f, "dictionary key `{}` not found", s),
+            Self::DictTypeMissMatch(expected, actual) => write!(
+                f,
+                "dictionary type missmatch: required `{}`, given `{}`",
+                expected, actual
+            ),
+            Self::InvalidStreamLength => write!(f, "stream object length is invalid"),
+        }
     }
 }
 
@@ -56,10 +78,7 @@ impl PdfObject for PdfBoolean {
     }
 
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "boolean",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("boolean"), byte_offset)
     }
 }
 
@@ -94,10 +113,7 @@ impl PdfObject for PdfInteger {
     }
 
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "integer",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("integer"), byte_offset)
     }
 }
 
@@ -134,10 +150,7 @@ impl PdfObject for PdfReal {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "real",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("real"), byte_offset)
     }
 }
 
@@ -170,10 +183,7 @@ impl PdfObject for PdfName {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "name",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("name"), byte_offset)
     }
 }
 impl PartialEq<str> for PdfName {
@@ -200,10 +210,7 @@ impl PdfObject for PdfString {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "string",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("string"), byte_offset)
     }
 }
 
@@ -232,10 +239,7 @@ impl PdfObject for PdfArray {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "array",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("array"), byte_offset)
     }
 }
 
@@ -262,10 +266,7 @@ impl PdfObject for PdfNull {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "null",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("null"), byte_offset)
     }
 }
 
@@ -303,7 +304,10 @@ impl PdfIndirectRef {
         let mut buf_size = 200;
 
         loop {
-            let buffer = read_partially(file, offset, buf_size)?;
+            let buffer = match read_partially(file, offset, buf_size) {
+                Ok(buffer) => buffer,
+                Err(e) => return Err(Error::new(ErrorKind::Io(e), offset)),
+            };
             let buffer = buffer.as_slice();
 
             let mut p = match parser::Parser::new(&buffer, offset) {
@@ -335,10 +339,7 @@ impl PdfObject for PdfIndirectRef {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "indirect ref",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("indirect ref"), byte_offset)
     }
 }
 
@@ -378,9 +379,9 @@ impl PdfDict {
         if type_obj == expected_type {
             Ok(())
         } else {
-            Err(Error::DictTypeMissMatch(
-                expected_type.to_string(),
-                (&type_obj).payload.clone(),
+            Err(Error::new(
+                ErrorKind::DictTypeMissMatch(expected_type, (&type_obj).payload.clone()),
+                self.byte_offset,
             ))
         }
     }
@@ -389,7 +390,10 @@ impl PdfDict {
         for ref key in keys {
             let key_str = String::from(*key);
             if let None = self.payload.get(&key_str) {
-                return Err(Error::DictKeyNotFound(key));
+                return Err(Error::new(
+                    ErrorKind::DictKeyNotFound(key),
+                    self.byte_offset,
+                ));
             }
         }
 
@@ -409,10 +413,7 @@ impl PdfObject for PdfDict {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "dictionary",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("dictionary"), byte_offset)
     }
 }
 
@@ -445,10 +446,10 @@ impl PdfObject for PdfIndirectObj {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "indirect object",
+        Error::new(
+            ErrorKind::ObjectTypeMissMatch("indirect object"),
             byte_offset,
-        }
+        )
     }
 }
 
@@ -482,7 +483,10 @@ impl PdfStreamObj {
     ) -> Result<Vec<u8>, Error> {
         let length = self.get_length_recursive(file, xref)?;
 
-        let byte_vec = read_partially(file, self.byte_offset, length as u64)?;
+        let byte_vec = match read_partially(file, self.byte_offset, length as u64) {
+            Ok(buffer) => buffer,
+            Err(e) => return Err(Error::new(ErrorKind::Io(e), self.byte_offset)),
+        };
 
         if byte_vec.len() != length {
             panic!("cannot read all");
@@ -507,7 +511,7 @@ impl PdfStreamObj {
         };
 
         if length < 0 {
-            return Err(Error::InvalidStreamLength);
+            return Err(Error::new(ErrorKind::InvalidStreamLength, self.byte_offset));
         }
 
         Ok(length.try_into().unwrap())
@@ -518,9 +522,6 @@ impl PdfObject for PdfStreamObj {
         self.byte_offset
     }
     fn type_missmatch_error(byte_offset: u64) -> Error {
-        Error::ObjectTypeMissMatch {
-            required_type: "stream object",
-            byte_offset,
-        }
+        Error::new(ErrorKind::ObjectTypeMissMatch("stream object"), byte_offset)
     }
 }

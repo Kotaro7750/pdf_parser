@@ -47,9 +47,9 @@ impl std::fmt::Display for Error {
         match self {
             Error::Io(e) => write!(f, "{}", e),
             Error::Header(e) => write!(f, "header error: {}", e),
-            Error::Trailer(e) => write!(f, "Error on Parsing Trailer: {}", e),
+            Error::Trailer(e) => write!(f, "error on trailer: {}", e),
             Error::PageTree(e) => write!(f, "Error on Page Tree: {:?}", e),
-            Error::Object(e) => write!(f, "Error on Parsing Object: {:?}", e),
+            Error::Object(e) => write!(f, "Error on Parsing Object: {}", e),
         }
     }
 }

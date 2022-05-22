@@ -2,7 +2,6 @@ use std::fmt;
 
 use crate::object;
 use crate::parser::error as parser_error;
-use crate::parser::Object;
 
 #[derive(Debug)]
 pub enum Error {
@@ -11,7 +10,6 @@ pub enum Error {
     StartXRefNotFound,
     TrailerNotFound,
     ParseXRefOffset(parser_error::Error),
-    XRefOffsetNotInteger(Object),
     ParseTrailerDict(parser_error::Error),
     Object(object::Error),
 }
@@ -19,18 +17,15 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            Error::Io(e) => write!(f, "Error of IO: {}", e),
+            Error::Io(e) => write!(f, "io: {}", e),
             Error::EOFNotFound => write!(f, "EOF marker is not found"),
             Error::StartXRefNotFound => write!(f, "startxref is not found"),
             Error::TrailerNotFound => write!(f, "trailer is not found"),
-            Error::ParseXRefOffset(e) => write!(
-                f,
-                "Error on parsing byte offset of cross reference table: {}",
-                e
-            ),
-            Error::XRefOffsetNotInteger(obj) => write!(f, "Object '{:?}' is not integer", obj),
-            Error::ParseTrailerDict(e) => write!(f, "Error on parsing trailer dictionary: {}", e),
-            Error::Object(e) => write!(f, "Error in object: {:?}", e),
+            Error::ParseXRefOffset(e) => {
+                write!(f, "parse byte offset of cross reference table: {}", e)
+            }
+            Error::ParseTrailerDict(e) => write!(f, "parse trailer dictionary: {}", e),
+            Error::Object(e) => write!(f, "object: {}", e),
         }
     }
 }
