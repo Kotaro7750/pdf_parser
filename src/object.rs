@@ -19,11 +19,13 @@ impl Error {
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        write!(f, "{} at byte offset `{}`", self.kind, self.byte_offset)
+        match &self.kind {
+            ErrorKind::Parser(e) => write!(f, "{}", e),
+            _ => write!(f, "{} at byte offset `{}`", self.kind, self.byte_offset),
+        }
     }
 }
 
-// TODO 何のオブジェクトでエラーが出たのかわからない
 #[derive(Debug)]
 pub enum ErrorKind {
     Io(std::io::Error),
@@ -31,6 +33,7 @@ pub enum ErrorKind {
     DictKeyNotFound(&'static str),
     DictTypeMissMatch(&'static str, String),
     InvalidStreamLength,
+    Parser(parser::error::Error),
 }
 impl std::fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
@@ -44,6 +47,7 @@ impl std::fmt::Display for ErrorKind {
                 expected, actual
             ),
             Self::InvalidStreamLength => write!(f, "stream object length is invalid"),
+            Self::Parser(e) => write!(f, "{}", e),
         }
     }
 }
@@ -327,8 +331,10 @@ impl PdfIndirectRef {
                 }
             };
 
-            // TODO エラーは書こう
-            let obj = p.parse().unwrap();
+            let obj = match p.parse() {
+                Ok(obj) => obj,
+                Err(e) => return Err(Error::new(ErrorKind::Parser(e), offset)),
+            };
 
             return Ok(obj);
         }
