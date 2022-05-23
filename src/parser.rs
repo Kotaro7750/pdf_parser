@@ -192,10 +192,7 @@ impl Parser {
             };
         }
 
-        Err(Error::new(
-            ErrorKind::UnexpectedToken(token.clone()),
-            token_byte_offset,
-        ))
+        Err(Error::new(ErrorKind::UnexpectedToken, token_byte_offset))
     }
 
     fn parse_array_content(&mut self) -> Result<Vec<Object>, error::Error> {
@@ -260,10 +257,7 @@ impl Parser {
                     self.next();
                     return Ok(content);
                 } else {
-                    return Err(Error::new(
-                        ErrorKind::UnexpectedToken(token.clone()),
-                        token.byte_offset,
-                    ));
+                    return Err(Error::new(ErrorKind::UnexpectedToken, token.byte_offset));
                 }
             }
         }
@@ -278,10 +272,7 @@ impl Parser {
                     token_content: TokenContent::IndirectObjEnd,
                     byte_offset: _,
                 } => Ok(obj),
-                _ => Err(Error::new(
-                    ErrorKind::UnexpectedToken(token.clone()),
-                    token.byte_offset,
-                )),
+                _ => Err(Error::new(ErrorKind::UnexpectedToken, token.byte_offset)),
             },
             None => Err(Error::new(ErrorKind::NoToken, self.byte_offset)),
         }

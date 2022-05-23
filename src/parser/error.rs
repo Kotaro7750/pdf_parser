@@ -1,7 +1,6 @@
 use std::fmt;
 
 use crate::lexer::error as lexer_error;
-use crate::lexer::Token;
 
 #[derive(Debug)]
 pub struct Error {
@@ -30,7 +29,7 @@ impl std::error::Error for Error {}
 pub enum ErrorKind {
     NoToken,
     IndirectObjMissMatch,
-    UnexpectedToken(Token),
+    UnexpectedToken,
     InvalidStreamObj,
     Lexer(lexer_error::Error),
 }
@@ -40,7 +39,7 @@ impl fmt::Display for ErrorKind {
         match self {
             ErrorKind::NoToken => write!(f, "token is missing"),
             ErrorKind::IndirectObjMissMatch => write!(f, "keyword obj and endobj is not matched"),
-            ErrorKind::UnexpectedToken(token) => write!(f, "unexpected token found `{}`", token),
+            ErrorKind::UnexpectedToken => write!(f, "unexpected token found"),
             ErrorKind::InvalidStreamObj => write!(f, "invalid stream object"),
             ErrorKind::Lexer(e) => write!(f, "cannot tokenize: {}", e),
         }
