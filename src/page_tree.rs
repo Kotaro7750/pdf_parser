@@ -67,7 +67,7 @@ impl Pages {
         let root_node_obj = root_node_obj.get_object();
 
         let root_node_dict =
-            object::PdfDict::ensure_with_key(&root_node_obj, vec!["Type", "Kids", "Count"])?;
+            object::PdfDict::ensure_with_key(root_node_obj, vec!["Type", "Kids", "Count"])?;
         root_node_dict.ensure_type("Pages")?;
 
         let kids = root_node_dict.get("Kids").unwrap();
@@ -76,7 +76,7 @@ impl Pages {
         let mut page_list = Vec::<Page>::new();
         let mut detected_pages = 0;
         for kid in kids {
-            let kid_ref = object::PdfIndirectRef::ensure(&kid)?;
+            let kid_ref = object::PdfIndirectRef::ensure(kid)?;
 
             let mut page_list_in_kid =
                 Self::parse_page_tree_node(file, xref, kid_ref, detected_pages + 1)?;
@@ -98,22 +98,22 @@ impl Pages {
         let node_obj = object::PdfIndirectObj::ensure(&node_obj)?.get_object();
 
         // ページリストのノードには中間ノードかページノードがある
-        let node_dict = object::PdfDict::ensure_with_key(&node_obj, vec!["Type"])?;
+        let node_dict = object::PdfDict::ensure_with_key(node_obj, vec!["Type"])?;
 
         let mut page_list = Vec::<Page>::new();
-        if let Ok(_) = node_dict.ensure_type("Page") {
+        if node_dict.ensure_type("Page").is_ok() {
             let page = Self::parse_page_node(node_dict, start_page_number)?;
 
             page_list.push(page);
-        } else if let Ok(_) = object::PdfDict::ensure_type(node_dict, "Pages") {
-            let node_dict = object::PdfDict::ensure_with_key(&node_obj, vec!["Kids", "Count"])?;
+        } else if object::PdfDict::ensure_type(node_dict, "Pages").is_ok() {
+            let node_dict = object::PdfDict::ensure_with_key(node_obj, vec!["Kids", "Count"])?;
 
             let kids = node_dict.get("Kids").unwrap();
             let kids = object::PdfArray::ensure(kids)?;
 
             let mut detected_pages = 0;
             for kid in kids {
-                let kid_ref = object::PdfIndirectRef::ensure(&kid)?;
+                let kid_ref = object::PdfIndirectRef::ensure(kid)?;
 
                 let mut page_list_in_kid = Self::parse_page_tree_node(
                     file,
@@ -153,8 +153,7 @@ impl Pages {
 
                 xobj_dict
                     .iter()
-                    .filter(|kv| object::PdfIndirectRef::ensure(kv.1).is_ok())
-                    .map(|kv| object::PdfIndirectRef::ensure(kv.1).unwrap())
+                    .filter_map(|kv| object::PdfIndirectRef::ensure(kv.1).ok())
                     .for_each(|indirect_ref| external_objects.push(indirect_ref.clone()))
             }
         }

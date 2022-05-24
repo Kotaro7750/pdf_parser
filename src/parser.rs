@@ -54,7 +54,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Result<Parser, Error> {
-        if buffer.len() == 0 {
+        if buffer.is_empty() {
             panic!("buffer is empty");
         };
 
@@ -81,7 +81,7 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<Object, error::Error> {
-        Ok(self.parse_object()?)
+        self.parse_object()
     }
 
     fn next(&mut self) -> Option<&Token> {
@@ -202,13 +202,13 @@ impl Parser {
         loop {
             may_token = self.current_token();
 
-            if let None = may_token {
+            if may_token.is_none() {
                 return Err(Error::new(ErrorKind::NoToken, self.byte_offset));
             }
 
             let token = may_token.unwrap();
 
-            if let TokenContent::EOL = token.content() {
+            if let TokenContent::Eol = token.content() {
                 self.next();
                 continue;
             }
@@ -232,13 +232,13 @@ impl Parser {
         loop {
             may_token = self.current_token();
 
-            if let None = may_token {
+            if may_token.is_none() {
                 return Err(Error::new(ErrorKind::NoToken, self.byte_offset));
             }
 
             let token = may_token.unwrap();
 
-            if let TokenContent::EOL = token.content() {
+            if let TokenContent::Eol = token.content() {
                 self.next();
                 continue;
             }
@@ -246,19 +246,17 @@ impl Parser {
             if is_prev_name {
                 content.insert(key.clone(), self.parse_object()?);
                 is_prev_name = false;
+            } else if let TokenContent::Name(string) = token.content() {
+                key = string.clone();
+                // TODO キーの重複はどうする？
+                is_prev_name = true;
+                self.next();
+                continue;
+            } else if let TokenContent::DictEnd = token.content() {
+                self.next();
+                return Ok(content);
             } else {
-                if let TokenContent::Name(string) = token.content() {
-                    key = string.clone();
-                    // TODO キーの重複はどうする？
-                    is_prev_name = true;
-                    self.next();
-                    continue;
-                } else if let TokenContent::DictEnd = token.content() {
-                    self.next();
-                    return Ok(content);
-                } else {
-                    return Err(Error::new(ErrorKind::UnexpectedToken, token.byte_offset));
-                }
+                return Err(Error::new(ErrorKind::UnexpectedToken, token.byte_offset));
             }
         }
     }

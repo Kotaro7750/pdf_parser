@@ -343,7 +343,7 @@ impl PdfIndirectRef {
             };
             let buffer = buffer.as_slice();
 
-            let mut p = match parser::Parser::new(&buffer, offset) {
+            let mut p = match parser::Parser::new(buffer, offset) {
                 Ok(p) => p,
                 // bufferが足りなくて途中で切れてしまうと字句解析自体も失敗することがある
                 // TODO これだけでいいのか？
@@ -419,16 +419,16 @@ impl PdfDict {
             Ok(())
         } else {
             Err(Error::new(
-                ErrorKind::DictTypeMissMatch(expected_type, (&type_obj).payload.clone()),
+                ErrorKind::DictTypeMissMatch(expected_type, type_obj.payload.clone()),
                 self.byte_offset,
             ))
         }
     }
 
     pub fn assert_with_key(&self, keys: Vec<&'static str>) -> Result<(), Error> {
-        for ref key in keys {
-            let key_str = String::from(*key);
-            if let None = self.payload.get(&key_str) {
+        for key in keys {
+            let key_str = String::from(key);
+            if self.payload.get(&key_str).is_none() {
                 return Err(Error::new(
                     ErrorKind::DictKeyNotFound(key),
                     self.byte_offset,
@@ -472,7 +472,7 @@ impl PdfIndirectObj {
     pub fn ensure(obj: &Object) -> Result<&Self, Error> {
         match obj {
             Object::IndirectObj(obj) => Ok(obj),
-            _ => return Err(PdfIndirectObj::type_missmatch_error(obj.byte_offset())),
+            _ => Err(PdfIndirectObj::type_missmatch_error(obj.byte_offset())),
         }
     }
 

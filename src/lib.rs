@@ -29,11 +29,11 @@ impl<'a> PDF<'a> {
         header::validate_pdf_header(file)?;
 
         let trailer = trailer::parse_trailer(file, size)?;
-        let mut xref = cross_reference::XRef::new(file, trailer.xref_start_offset)?;
+        let xref = cross_reference::XRef::new(file, trailer.xref_start_offset)?;
 
         // ドキュメントカタログ
         let root_ref = trailer.get_root_catalog_ref();
-        let root_obj = root_ref.get_indirect_obj(file, &mut xref)?;
+        let root_obj = root_ref.get_indirect_obj(file, &xref)?;
         let root_obj = object::PdfIndirectObj::ensure(&root_obj)?.get_object();
 
         let root_dict = object::PdfDict::ensure_with_key(root_obj, vec!["Type", "Pages"])?;
@@ -42,11 +42,11 @@ impl<'a> PDF<'a> {
 
         let pages_ref = object::PdfIndirectRef::ensure(root_dict.get("Pages").unwrap())?;
 
-        let pages = page_tree::Pages::new(file, &mut xref, pages_ref)?;
+        let pages = page_tree::Pages::new(file, &xref, pages_ref)?;
 
         Ok(PDF {
-            file: file,
-            size: size,
+            file,
+            size,
             trailer,
             xref,
             pages,

@@ -69,7 +69,7 @@ fn construct_image_from_xobj(
     file: &mut File,
     xref: &XRef,
 ) -> Result<image_lib::RgbImage, Error> {
-    let xobj = xobj_ref.get_indirect_obj(file, &xref)?;
+    let xobj = xobj_ref.get_indirect_obj(file, xref)?;
     let xobj = object::PdfStreamObj::ensure_stream(&xobj)?;
 
     let xobj_dict = &xobj.dict;
@@ -82,7 +82,7 @@ fn construct_image_from_xobj(
 
     let stream_content = xobj.get_stream(file, xref)?;
 
-    let image_param = image_localmod::ImageDecodeParam::new(&xobj_dict, file, xref).unwrap();
+    let image_param = image_localmod::ImageDecodeParam::new(xobj_dict, file, xref).unwrap();
     let image = image_localmod::decode_image(&image_param, &stream_content).unwrap();
 
     Ok(image)

@@ -5,7 +5,7 @@ pub mod test;
 
 // buffer中に表れるtargetバイト列のうち先頭から見て最初のものの先頭インデックスを返す
 fn first_match_index(buffer: &[u8], target: &[u8]) -> Option<usize> {
-    if target.len() == 0 {
+    if target.is_empty() {
         return Some(0);
     }
 
@@ -27,7 +27,7 @@ fn first_match_index(buffer: &[u8], target: &[u8]) -> Option<usize> {
 
 // buffer中に表れるtargetバイト列のうち先頭から見て最後のものの先頭インデックスを返す
 fn last_match_index(buffer: &[u8], target: &[u8]) -> Option<usize> {
-    if target.len() == 0 {
+    if target.is_empty() {
         return Some(buffer.len());
     }
 

@@ -95,6 +95,6 @@ fn parse_trailer_dict(buffer: &[u8], byte_offset: u64) -> Result<parser::Object,
 
     match parser.parse() {
         Ok(obj) => Ok(obj),
-        Err(e) => return Err(error::Error::ParseTrailerDict(e)),
+        Err(e) => Err(error::Error::ParseTrailerDict(e)),
     }
 }

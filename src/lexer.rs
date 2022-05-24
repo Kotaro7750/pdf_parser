@@ -39,7 +39,7 @@ impl std::fmt::Display for Token {
 
 #[derive(PartialEq, Debug, Clone)]
 pub enum TokenContent {
-    EOL,
+    Eol,
     Boolean(bool),
     Integer(isize),
     Real(f64),
@@ -62,7 +62,7 @@ pub enum TokenContent {
 impl std::fmt::Display for TokenContent {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            TokenContent::EOL => write!(f, "(EOL)"),
+            TokenContent::Eol => write!(f, "(EOL)"),
             TokenContent::Boolean(boolean) => write!(f, "(boolean `{}`)", boolean),
             TokenContent::Integer(int) => write!(f, "(integer `{}`)", int),
             TokenContent::Real(real) => write!(f, "(real `{}`)", real),
@@ -110,7 +110,7 @@ fn parse_string(buffer: &[u8]) -> Result<Vec<u8>, Error> {
 
         if is_in_octal {
             // 3桁既に読んでいたり8進数文字以外の文字が出てきたら確定させる
-            if octal_string.len() == 3 || !(0x30 <= byte && byte <= 0x37) {
+            if octal_string.len() == 3 || !((0x30..=0x37).contains(&byte)) {
                 let octal_value = u16::from_str_radix(octal_string.as_str(), 8).unwrap();
                 let octal_value: u8 = octal_value.to_be_bytes()[1];
 
@@ -204,7 +204,7 @@ fn parse_hex_string(buffer: &[u8]) -> Result<Vec<u8>, ()> {
 
     // 奇数桁だったら最終桁に0を補う
     if buffer.len() % 2 == 1 {
-        hex_string.push_str("0");
+        hex_string.push('0');
         vec.push(u8::from_str_radix(hex_string.as_str(), 16).unwrap());
     }
 
@@ -226,7 +226,7 @@ pub struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     pub fn new(buffer: &[u8], buffer_start_offset: u64) -> Lexer {
-        if buffer.len() == 0 {
+        if buffer.is_empty() {
             panic!("buffer is empty");
         }
 
@@ -286,33 +286,43 @@ impl<'a> Lexer<'a> {
     }
 
     fn is_number_char(&self) -> bool {
-        match self.char {
-            '0'..='9' | '+' | '-' | '.' => true,
-            _ => false,
-        }
+        matches!(self.char, '0'..='9' | '+' | '-' | '.')
     }
 
     fn is_regular_char(&self) -> bool {
-        match self.char {
-            '\0' | '\t' | '\n' | '\x12' | '\r' | ' ' | '(' | ')' | '<' | '>' | '[' | ']' | '{'
-            | '}' | '/' | '%' => false,
-            _ => true,
-        }
+        !matches!(
+            self.char,
+            '\0' | '\t'
+                | '\n'
+                | '\x12'
+                | '\r'
+                | ' '
+                | '('
+                | ')'
+                | '<'
+                | '>'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '/'
+                | '%'
+        )
     }
 
     // カーソル下のバイト列がtargetバイト列と一致するならカーソルをtargetの最後まで移動させる
     // 一致しないなら何もしない
     fn assume_and_move(&mut self, target: &[u8]) -> bool {
-        if target.len() == 0 {
+        if target.is_empty() {
             return false;
         }
 
-        for i in 0..target.len() {
-            if self.buffer.len() <= (self.i + i) {
+        for (target_i, byte) in target.iter().enumerate() {
+            if self.buffer.len() <= (self.i + target_i) {
                 return false;
             }
 
-            if self.buffer[self.i + i] != target[i] {
+            if self.buffer[self.i + target_i] != *byte {
                 return false;
             }
         }
@@ -411,7 +421,7 @@ impl<'a> Lexer<'a> {
 
                 let str = str::from_utf8(&self.buffer[self.token_head_i..self.i]).unwrap();
 
-                if let Ok(int) = isize::from_str_radix(str, 10) {
+                if let Ok(int) = str.parse::<isize>() {
                     self.confirm_token(TokenContent::Integer(int));
                     continue;
                 }
@@ -502,22 +512,20 @@ impl<'a> Lexer<'a> {
                 let mut prev_backslash = false;
                 let mut parenthes_depth = 0;
 
-                while !(prev_backslash == false && parenthes_depth == 0 && self.char == ')') {
+                while !(!prev_backslash && parenthes_depth == 0 && self.char == ')') {
                     // エスケープされていない(はエスケープされていない)に対応させる必要がある
-                    if prev_backslash == false && self.char == '(' {
+                    if !prev_backslash && self.char == '(' {
                         parenthes_depth += 1;
                     }
 
                     // エスケープされていない)は対応関係を更新する
-                    if prev_backslash == false && self.char == ')' {
-                        if parenthes_depth != 0 {
-                            parenthes_depth -= 1;
-                        }
+                    if !prev_backslash && self.char == ')' && parenthes_depth != 0 {
+                        parenthes_depth -= 1;
                     }
 
                     // バックスラッシュを呼んだときには次の文字をエスケープする必要がある
                     // ただしバックスラッシュの連続はバックスラッシュそのものを表すため無視する
-                    if prev_backslash == false && self.char == '\\' {
+                    if !prev_backslash && self.char == '\\' {
                         prev_backslash = true;
                     } else {
                         prev_backslash = false;

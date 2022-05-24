@@ -52,8 +52,8 @@ impl ImageDecodeParam {
 
         image_dict.assert_with_key(vec!["Width", "Height"])?;
 
-        let width = object::PdfInteger::ensure(&image_dict.get("Width").unwrap())?;
-        let height = object::PdfInteger::ensure(&image_dict.get("Height").unwrap())?;
+        let width = object::PdfInteger::ensure(image_dict.get("Width").unwrap())?;
+        let height = object::PdfInteger::ensure(image_dict.get("Height").unwrap())?;
 
         width.assert_natural()?;
         let width = width.unpack() as u32;
@@ -81,16 +81,14 @@ fn get_colorspace(
 
     let colorspace = if let Ok(name) = object::PdfName::ensure(colorspace_obj) {
         name.clone()
-    } else if let indirect_ref = object::PdfIndirectRef::ensure(colorspace_obj)? {
+    } else {
+        let indirect_ref = object::PdfIndirectRef::ensure(colorspace_obj)?;
         let indirect_obj = indirect_ref.get_indirect_obj(file, xref)?;
 
         let may_name = object::PdfIndirectObj::ensure(&indirect_obj)?.get_object();
         let name = object::PdfName::ensure(may_name)?;
 
         name.clone()
-    } else {
-        // 上のPdfIndirectRef::ensureで間接参照オブジェクト以外のオブジェクトだった場合にはリターンしてくれるのでここには到達しえない
-        panic!()
     };
 
     Ok(match colorspace.as_str() {
