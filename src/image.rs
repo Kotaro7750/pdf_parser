@@ -6,24 +6,20 @@ use std::io::Read;
 
 use crate::cross_reference;
 use crate::object;
-use crate::parser::Object;
 
 #[derive(Debug)]
 pub enum Error {
     Object(object::Error),
     UnsupporttedColorSpace,
 }
-
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            // TODO object::ErrorにDisplayトレイトを実装したら適切なエラー文にする
-            Error::Object(e) => write!(f, "{}", e),
+            Error::Object(e) => write!(f, "object: {}", e),
             Error::UnsupporttedColorSpace => write!(f, "colorspace is not supportted"),
         }
     }
 }
-
 impl From<object::Error> for Error {
     fn from(e: object::Error) -> Self {
         Self::Object(e)
@@ -50,7 +46,6 @@ impl ImageDecodeParam {
         image_dict.assert_with_key(vec!["Subtype"])?;
 
         let subtype = object::PdfName::ensure(image_dict.get("Subtype").unwrap())?;
-
         if subtype != "Image" {
             panic!("subtype is not image");
         }
@@ -60,7 +55,10 @@ impl ImageDecodeParam {
         let width = object::PdfInteger::ensure(&image_dict.get("Width").unwrap())?;
         let height = object::PdfInteger::ensure(&image_dict.get("Height").unwrap())?;
 
+        width.assert_natural()?;
         let width = width.unpack() as u32;
+
+        height.assert_natural()?;
         let height = height.unpack() as u32;
 
         let colorspace = get_colorspace(image_dict, file, xref)?;
@@ -73,8 +71,37 @@ impl ImageDecodeParam {
     }
 }
 
-pub fn decode_image(image: &ImageDecodeParam, byte_vec: &Vec<u8>) -> Result<RgbImage, Error> {
-    let deflater = ZlibDecoder::new(&byte_vec[..]);
+fn get_colorspace(
+    image_dict: &object::PdfDict,
+    file: &mut File,
+    xref: &cross_reference::XRef,
+) -> Result<ColorSpace, Error> {
+    image_dict.assert_with_key(vec!["ColorSpace"])?;
+    let colorspace_obj = image_dict.get("ColorSpace").unwrap();
+
+    let colorspace = if let Ok(name) = object::PdfName::ensure(colorspace_obj) {
+        name.clone()
+    } else if let indirect_ref = object::PdfIndirectRef::ensure(colorspace_obj)? {
+        let indirect_obj = indirect_ref.get_indirect_obj(file, xref)?;
+
+        let may_name = object::PdfIndirectObj::ensure(&indirect_obj)?.get_object();
+        let name = object::PdfName::ensure(may_name)?;
+
+        name.clone()
+    } else {
+        // 上のPdfIndirectRef::ensureで間接参照オブジェクト以外のオブジェクトだった場合にはリターンしてくれるのでここには到達しえない
+        panic!()
+    };
+
+    Ok(match colorspace.as_str() {
+        "DeviceRGB" => ColorSpace::DeviceRGB,
+        "DeviceGray" => ColorSpace::DeviceGray,
+        _ => return Err(Error::UnsupporttedColorSpace),
+    })
+}
+
+pub fn decode_image(image: &ImageDecodeParam, image_bytes: &[u8]) -> Result<RgbImage, Error> {
+    let deflater = ZlibDecoder::new(image_bytes);
 
     let decoded: Result<Vec<u8>, _> = deflater.bytes().collect();
     let decoded = decoded.unwrap();
@@ -94,31 +121,4 @@ pub fn decode_image(image: &ImageDecodeParam, byte_vec: &Vec<u8>) -> Result<RgbI
     let image_result = image_result.into_rgb8();
 
     Ok(image_result)
-}
-
-fn get_colorspace(
-    image_dict: &object::PdfDict,
-    file: &mut File,
-    xref: &cross_reference::XRef,
-) -> Result<ColorSpace, Error> {
-    let colorspace = match image_dict.get("ColorSpace").unwrap() {
-        Object::Name(name) => name.clone(),
-        Object::IndirectRef(indirect_ref) => {
-            let hoge = indirect_ref.get_indirect_obj(file, xref)?;
-
-            match object::PdfIndirectObj::ensure(&hoge)?.get_object() {
-                Object::Name(name) => name.clone(),
-                _ => {
-                    return Err(Error::UnsupporttedColorSpace);
-                }
-            }
-        }
-        _ => return Err(Error::UnsupporttedColorSpace),
-    };
-
-    Ok(match colorspace.as_str() {
-        "DeviceRGB" => ColorSpace::DeviceRGB,
-        "DeviceGray" => ColorSpace::DeviceGray,
-        _ => return Err(Error::UnsupporttedColorSpace),
-    })
 }

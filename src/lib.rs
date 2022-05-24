@@ -63,9 +63,9 @@ impl<'a> PDF<'a> {
     ) -> Result<Vec<Vec<image_lib::RgbImage>>, error::Error> {
         let mut images_of_pages: Vec<Vec<image_lib::RgbImage>> = vec![];
         for page_number in request_pages {
-            let page = &self.pages.get_page(*page_number)?;
+            let page = self.pages.get_page(*page_number)?;
 
-            images_of_pages.push(page.extract_images(&mut self.file, &self.xref).unwrap());
+            images_of_pages.push(page.extract_images(self.file, &self.xref).unwrap());
         }
 
         Ok(images_of_pages)
