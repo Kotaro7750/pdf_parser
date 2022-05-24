@@ -18,7 +18,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
             // TODO object::ErrorにDisplayトレイトを実装したら適切なエラー文にする
-            Error::Object(e) => write!(f, "{:?}", e),
+            Error::Object(e) => write!(f, "{}", e),
             Error::UnsupporttedColorSpace => write!(f, "colorspace is not supportted"),
         }
     }

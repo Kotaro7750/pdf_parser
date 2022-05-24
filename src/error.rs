@@ -1,7 +1,7 @@
 use crate::cross_reference;
 use crate::header;
 use crate::object;
-use crate::page;
+use crate::page_tree;
 use crate::trailer::error as trailer_error;
 
 #[derive(Debug)]
@@ -10,7 +10,7 @@ pub enum Error {
     Header(header::Error),
     Trailer(trailer_error::Error),
     Xref(cross_reference::Error),
-    PageTree(page::Error),
+    PageTree(page_tree::Error),
     Object(object::Error),
 }
 
@@ -44,8 +44,8 @@ impl From<object::Error> for Error {
     }
 }
 
-impl From<page::Error> for Error {
-    fn from(e: page::Error) -> Self {
+impl From<page_tree::Error> for Error {
+    fn from(e: page_tree::Error) -> Self {
         Self::PageTree(e)
     }
 }
@@ -53,12 +53,12 @@ impl From<page::Error> for Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Error::Io(e) => write!(f, "{}", e),
+            Error::Io(e) => write!(f, "io: {}", e),
             Error::Header(e) => write!(f, "header error: {}", e),
             Error::Trailer(e) => write!(f, "trailer error: {}", e),
             Error::Xref(e) => write!(f, "cross reference table error: {}", e),
-            Error::PageTree(e) => write!(f, "Error on Page Tree: {:?}", e),
-            Error::Object(e) => write!(f, "Error on Parsing Object: {}", e),
+            Error::PageTree(e) => write!(f, "page tree error {}", e),
+            Error::Object(e) => write!(f, "object: {}", e),
         }
     }
 }

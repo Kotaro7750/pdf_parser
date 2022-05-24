@@ -8,6 +8,7 @@ mod image;
 mod lexer;
 mod object;
 mod page;
+mod page_tree;
 mod parser;
 mod raw_byte;
 mod trailer;
@@ -18,7 +19,7 @@ pub struct PDF<'a> {
     size: u64,
     trailer: trailer::Trailer,
     xref: cross_reference::XRef,
-    pages: Vec<page::Page>,
+    pages: page_tree::Pages,
 }
 
 impl<'a> PDF<'a> {
@@ -41,7 +42,7 @@ impl<'a> PDF<'a> {
 
         let pages_ref = object::PdfIndirectRef::ensure(root_dict.get("Pages").unwrap())?;
 
-        let pages = page::parse_page_list(file, &mut xref, pages_ref)?;
+        let pages = page_tree::Pages::new(file, &mut xref, pages_ref)?;
 
         Ok(PDF {
             file: file,
@@ -62,9 +63,9 @@ impl<'a> PDF<'a> {
     ) -> Result<Vec<Vec<image_lib::RgbImage>>, error::Error> {
         let mut images_of_pages: Vec<Vec<image_lib::RgbImage>> = vec![];
         for page_number in request_pages {
-            let page = &self.pages[*page_number - 1];
+            let page = &self.pages.get_page(*page_number)?;
 
-            images_of_pages.push(page.extract_image(&mut self.file, &self.xref).unwrap());
+            images_of_pages.push(page.extract_images(&mut self.file, &self.xref).unwrap());
         }
 
         Ok(images_of_pages)
