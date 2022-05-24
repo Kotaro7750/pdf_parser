@@ -173,6 +173,6 @@ impl Pages {
     }
 
     fn get_page_number(&self) -> usize {
-        self.pages.len() + 1
+        self.pages.len()
     }
 }
