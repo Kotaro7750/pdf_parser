@@ -102,7 +102,7 @@ impl Pages {
 
         let mut page_list = Vec::<Page>::new();
         if node_dict.ensure_type("Page").is_ok() {
-            let page = Self::parse_page_node(node_dict, start_page_number)?;
+            let page = Self::parse_page_node(file, xref, node_dict, start_page_number)?;
 
             page_list.push(page);
         } else if object::PdfDict::ensure_type(node_dict, "Pages").is_ok() {
@@ -132,14 +132,21 @@ impl Pages {
         Ok(page_list)
     }
 
-    fn parse_page_node(node_dict: &object::PdfDict, page_number: usize) -> Result<Page, Error> {
-        let external_objects = Self::extract_external_objects(node_dict)?;
+    fn parse_page_node(
+        file: &mut File,
+        xref: &XRef,
+        node_dict: &object::PdfDict,
+        page_number: usize,
+    ) -> Result<Page, Error> {
+        let external_objects = Self::extract_external_objects(file, xref, node_dict)?;
         let may_thumbnail_ref = Self::extract_thumbnail_ref(node_dict)?;
 
         Ok(Page::new(page_number, may_thumbnail_ref, external_objects))
     }
 
     fn extract_external_objects(
+        file: &mut File,
+        xref: &XRef,
         node_dict: &object::PdfDict,
     ) -> Result<Vec<object::PdfIndirectRef>, Error> {
         let mut external_objects = Vec::<object::PdfIndirectRef>::new();
@@ -149,12 +156,25 @@ impl Pages {
             let resource_dict = object::PdfDict::ensure_with_key(resource_obj, vec![])?;
 
             if let Some(xobj_obj) = resource_dict.get("XObject") {
-                let xobj_dict = object::PdfDict::ensure_with_key(xobj_obj, vec![])?;
+                if let Ok(indirect_ref) = object::PdfIndirectRef::ensure(xobj_obj) {
+                    let xobj_obj = indirect_ref.get_indirect_obj(file, xref)?;
+                    let xobj_obj = object::PdfIndirectObj::ensure(&xobj_obj)?;
+                    let xobj_obj = xobj_obj.get_object();
 
-                xobj_dict
-                    .iter()
-                    .filter_map(|kv| object::PdfIndirectRef::ensure(kv.1).ok())
-                    .for_each(|indirect_ref| external_objects.push(indirect_ref.clone()))
+                    let xobj_dict = object::PdfDict::ensure_with_key(&xobj_obj, vec![])?;
+
+                    xobj_dict
+                        .iter()
+                        .filter_map(|kv| object::PdfIndirectRef::ensure(kv.1).ok())
+                        .for_each(|indirect_ref| external_objects.push(indirect_ref.clone()));
+                } else {
+                    let xobj_dict = object::PdfDict::ensure_with_key(xobj_obj, vec![])?;
+
+                    xobj_dict
+                        .iter()
+                        .filter_map(|kv| object::PdfIndirectRef::ensure(kv.1).ok())
+                        .for_each(|indirect_ref| external_objects.push(indirect_ref.clone()));
+                };
             }
         }
 

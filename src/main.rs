@@ -1,5 +1,6 @@
 extern crate pdf_parser;
 
+use image::codecs::jpeg::JpegEncoder;
 use std::env;
 use std::fs::File;
 use std::process;
@@ -26,11 +27,22 @@ fn main() {
         process::exit(1)
     });
 
-    for (page_number, images) in pdf.extract_image(&vec![1]).unwrap().iter().enumerate() {
+    for (page_number, images) in pdf
+        .extract_image(&(1..=5).collect())
+        .unwrap()
+        .iter()
+        .enumerate()
+    {
         for (image_number, image) in images.iter().enumerate() {
-            image
-                .save(format!("{}-{}.png", page_number, image_number))
-                .unwrap();
+            let mut file = File::create(format!("{}-{}.jpg", page_number, image_number)).unwrap();
+
+            let mut encoder = JpegEncoder::new(file);
+
+            encoder.encode_image(image).unwrap();
+
+            //image
+            //    .save(format!("{}-{}.png", page_number, image_number))
+            //    .unwrap();
         }
     }
 }

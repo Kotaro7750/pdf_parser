@@ -55,13 +55,34 @@ impl Page {
     ) -> Result<Vec<image_lib::RgbImage>, Error> {
         let mut images: Vec<image_lib::RgbImage> = vec![];
 
+        let mut smasks: Vec<object::PdfIndirectRef> = vec![];
         for xobj_ref in &(self.external_objects) {
-            let image = construct_image_from_xobj(xobj_ref, file, xref)?;
-            images.push(image);
+            let may_smask_ref = contained_smask_in_xobj(xobj_ref, file, xref)?;
+            if let Some(smask_ref) = may_smask_ref {
+                smasks.push(smask_ref);
+            }
+        }
+
+        for xobj_ref in &(self.external_objects) {
+            if !smasks.contains(xobj_ref) {
+                let image = construct_image_from_xobj(xobj_ref, file, xref)?;
+                images.push(image);
+            }
         }
 
         Ok(images)
     }
+}
+
+fn assert_xobj_is_image(xobj_dict: &object::PdfDict) -> Result<(), Error> {
+    xobj_dict.assert_with_key(vec!["Subtype"])?;
+
+    let subtype = object::PdfName::ensure(xobj_dict.get("Subtype").unwrap())?;
+    if subtype != "Image" {
+        panic!("subtype is not image");
+    };
+
+    Ok(())
 }
 
 fn construct_image_from_xobj(
@@ -72,18 +93,28 @@ fn construct_image_from_xobj(
     let xobj = xobj_ref.get_indirect_obj(file, xref)?;
     let xobj = object::PdfStreamObj::ensure_stream(&xobj)?;
 
-    let xobj_dict = &xobj.dict;
-    xobj_dict.assert_with_key(vec!["Subtype"])?;
-
-    let subtype = object::PdfName::ensure(xobj_dict.get("Subtype").unwrap())?;
-    if subtype != "Image" {
-        panic!("subtype is not image");
-    }
+    assert_xobj_is_image(&xobj.dict)?;
 
     let stream_content = xobj.get_stream(file, xref)?;
 
-    let image_param = image_localmod::ImageDecodeParam::new(xobj_dict, file, xref).unwrap();
+    let image_param = image_localmod::ImageDecodeParam::new(&xobj.dict, file, xref).unwrap();
     let image = image_localmod::decode_image(&image_param, &stream_content).unwrap();
 
     Ok(image)
+}
+
+fn contained_smask_in_xobj(
+    xobj_ref: &object::PdfIndirectRef,
+    file: &mut File,
+    xref: &XRef,
+) -> Result<Option<object::PdfIndirectRef>, Error> {
+    let xobj = xobj_ref.get_indirect_obj(file, xref)?;
+    let xobj = object::PdfStreamObj::ensure_stream(&xobj)?;
+
+    assert_xobj_is_image(&xobj.dict)?;
+
+    match &xobj.dict.get("SMask") {
+        Some(obj) => Ok(Some(object::PdfIndirectRef::ensure(obj)?.clone())),
+        None => Ok(None),
+    }
 }

@@ -415,6 +415,7 @@ dependencies = [
  "bmp",
  "flate2",
  "image",
+ "jpeg-decoder",
  "regex",
 ]
 

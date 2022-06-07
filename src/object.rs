@@ -263,6 +263,10 @@ impl PdfArray {
             _ => Err(PdfArray::type_missmatch_error(obj.byte_offset())),
         }
     }
+
+    pub fn get(&self, i: usize) -> Option<&Object> {
+        self.payload.get(i)
+    }
 }
 impl PdfObject for PdfArray {
     fn byte_offset(&self) -> u64 {
@@ -300,7 +304,7 @@ impl PdfObject for PdfNull {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct PdfIndirectRef {
     payload: (usize, usize),
     byte_offset: u64,
@@ -371,6 +375,11 @@ impl PdfIndirectRef {
 
     pub fn unpack(&self) -> (usize, usize) {
         self.payload
+    }
+}
+impl PartialEq for PdfIndirectRef {
+    fn eq(&self, other: &Self) -> bool {
+        self.payload == other.payload
     }
 }
 impl PdfObject for PdfIndirectRef {

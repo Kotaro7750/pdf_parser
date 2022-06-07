@@ -8,5 +8,6 @@ edition = "2021"
 [dependencies]
 regex = "1"
 flate2 = "1.0"
+jpeg-decoder = "0.2"
 bmp = "*"
 image = "0.24.2"
